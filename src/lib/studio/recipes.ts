@@ -22,6 +22,22 @@ function shuffle<T>(items: T[], seed: number): T[] {
   return out;
 }
 
+export function recipeKey(recipe: Pick<Recipe, "font" | "captionStyle" | "effect" | "look" | "framing" | "cuts" | "clipIds">) {
+  return [
+    recipe.font,
+    recipe.captionStyle,
+    recipe.effect,
+    recipe.look,
+    recipe.framing,
+    recipe.cuts.map((cut) => cut.toFixed(3)).join(","),
+    recipe.clipIds.join(","),
+  ].join("|");
+}
+
+export function uniqueRecipeCount(recipes: Recipe[]) {
+  return new Set(recipes.map(recipeKey)).size;
+}
+
 export function buildRecipes(opts: {
   count: number;
   styles: CaptionStyleId[];
@@ -40,36 +56,58 @@ export function buildRecipes(opts: {
   const looks = opts.looks.length ? opts.looks : (["film"] as LookId[]);
   const framings = opts.framings.length ? opts.framings : (["fill"] as FramingId[]);
   const ids = opts.clipIds.length ? opts.clipIds : ["clip"];
+  const combos: { style: CaptionStyleId; font: CaptionFontId; effect: CaptionEffectId; look: LookId; framing: FramingId }[] = [];
+  for (const font of fonts) {
+    for (const style of styles) {
+      for (const look of looks) {
+        for (const framing of framings) {
+          for (const effect of effects) combos.push({ style, font, effect, look, framing });
+        }
+      }
+    }
+  }
   const recipes: Recipe[] = [];
-
+  const used = new Set<string>();
   for (let i = 0; i < opts.count; i++) {
-    const style = styles[i % styles.length]!;
-    const font = fonts[Math.floor(i / styles.length) % fonts.length]!;
-    const effect = effects[Math.floor(i / (styles.length * fonts.length)) % effects.length]!;
-    const look = looks[Math.floor(i / (styles.length * fonts.length * effects.length)) % looks.length]!;
-    const framing = framings[Math.floor(i / (styles.length * fonts.length * effects.length * looks.length)) % framings.length]!;
-    const seed = 1000 + i * 97;
-    const order = shuffle(
-      Array.from({ length: ids.length }, (_, n) => n),
-      seed,
-    );
-    const cuts = makeCuts(opts.analysis.beats, opts.region.start, opts.region.end, opts.pacing, opts.analysis, seed);
-    const segments = Math.max(1, cuts.length - 1);
-    const clipIds = Array.from({ length: segments }, (_, seg) => ids[order[seg % order.length]! % ids.length]!);
-    recipes.push({
-      id: `r${i}-${style}-${font}-${effect}-${look}-${framing}`,
-      index: i,
-      captionStyle: style,
-      font,
-      effect,
-      look,
-      framing,
-      pacing: opts.pacing,
-      seed,
-      clipOrder: order,
-      clipIds,
-      cuts,
-    });
+    let placed = false;
+    for (let attempt = 0; attempt < 48 && !placed; attempt++) {
+      const combo = combos[(i + attempt) % combos.length]!;
+      const seed = (1000 + i * 97 + attempt * 131 + combo.font.length * 17) >>> 0;
+      const order = shuffle(
+        Array.from({ length: ids.length }, (_, n) => n),
+        seed,
+      );
+      const cuts = makeCuts(opts.analysis.beats, opts.region.start, opts.region.end, opts.pacing, opts.analysis, seed);
+      const segments = Math.max(1, cuts.length - 1);
+      const clipIds = Array.from({ length: segments }, (_, seg) => ids[order[seg % order.length]! % ids.length]!);
+      const draft = {
+        font: combo.font,
+        captionStyle: combo.style,
+        effect: combo.effect,
+        look: combo.look,
+        framing: combo.framing,
+        cuts,
+        clipIds,
+      };
+      const key = recipeKey(draft);
+      if (used.has(key)) continue;
+      used.add(key);
+      recipes.push({
+        id: `r${i}-${combo.style}-${combo.font}-${combo.effect}-${combo.look}-${combo.framing}`,
+        index: i,
+        captionStyle: combo.style,
+        font: combo.font,
+        effect: combo.effect,
+        look: combo.look,
+        framing: combo.framing,
+        pacing: opts.pacing,
+        seed,
+        clipOrder: order,
+        clipIds,
+        cuts,
+      });
+      placed = true;
+    }
   }
   return recipes;
 }
@@ -129,6 +167,20 @@ function cutsForCount(beats: number[], start: number, end: number, count: number
     cuts[i] = Math.min(max, Math.max(min, cuts[i]!));
   }
   return cuts;
+}
+
+export function retargetRecipe(recipe: Recipe, region: Region, analysis: AudioAnalysis): Recipe {
+  if (recipe.id === "single") {
+    return {
+      ...recipe,
+      cuts: cutsForCount(analysis.beats, region.start, region.end, Math.max(1, recipe.clipIds.length || 1)),
+    };
+  }
+  const cuts = makeCuts(analysis.beats, region.start, region.end, recipe.pacing, analysis, recipe.seed);
+  const segments = Math.max(1, cuts.length - 1);
+  const prev = recipe.clipIds.length ? recipe.clipIds : ["clip"];
+  const clipIds = Array.from({ length: segments }, (_, i) => prev[i] ?? prev[i % prev.length]!);
+  return { ...recipe, cuts, clipIds };
 }
 
 export function segmentIndexAt(cuts: number[], t: number): number {

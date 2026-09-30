@@ -229,3 +229,52 @@ export function drawCover(
   const y = dy + (dh - h) / 2 + oy;
   ctx.drawImage(source, x, y, w, h);
 }
+
+export function captureVideoPoster(src: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.defaultMuted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    let settled = false;
+    const finish = (value: string | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    video.onerror = () => finish(null);
+    video.onloadeddata = () => {
+      const t = Number.isFinite(video.duration) ? Math.min(0.4, Math.max(0.05, video.duration * 0.12)) : 0.1;
+      const paint = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          const vw = video.videoWidth || 720;
+          const vh = video.videoHeight || 1280;
+          canvas.width = 180;
+          canvas.height = 320;
+          const ctx = canvas.getContext("2d");
+          if (!ctx || !vw || !vh) {
+            finish(null);
+            return;
+          }
+          const scale = Math.max(canvas.width / vw, canvas.height / vh);
+          const w = vw * scale;
+          const h = vh * scale;
+          ctx.drawImage(video, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+          finish(canvas.toDataURL("image/jpeg", 0.72));
+        } catch {
+          finish(null);
+        }
+      };
+      video.onseeked = paint;
+      try {
+        video.currentTime = t;
+      } catch {
+        paint();
+      }
+      window.setTimeout(() => paint(), 1500);
+    };
+    video.src = src;
+  });
+}

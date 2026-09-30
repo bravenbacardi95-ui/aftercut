@@ -67,6 +67,21 @@ export async function getClipPcm(start: number, end: number, emphasizeVocals = f
   return { samples, sampleRate: TARGET_RATE, offset: t0, duration: dur };
 }
 
+export async function pcmFromBlob(blob: Blob, offset = 0): Promise<ClipPcm | null> {
+  if (!blob.size) return null;
+  const ctx = new AudioContext();
+  try {
+    const audio = await ctx.decodeAudioData(await blob.arrayBuffer());
+    const mix = await mixDown(audio, 0, audio.length);
+    const samples = await resample(mix, audio.sampleRate, TARGET_RATE);
+    return { samples, sampleRate: TARGET_RATE, offset, duration: audio.duration };
+  } catch {
+    return null;
+  } finally {
+    await ctx.close().catch(() => undefined);
+  }
+}
+
 export async function encodeClipWav(
   start: number,
   end: number,

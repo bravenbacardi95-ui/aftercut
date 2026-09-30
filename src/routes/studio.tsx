@@ -24,9 +24,9 @@ function StudioLayout() {
     const onKey = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
       const key = e.key.toLowerCase();
-      const el = e.target as HTMLElement | null;
+      const el = e.target instanceof Element ? e.target : null;
       const tag = el?.tagName;
-      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable;
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el instanceof HTMLElement && el.isContentEditable);
       const inBubble = Boolean(el?.closest("[data-word]"));
       if (!meta && e.key === "Tab") {
         if (typing && !inBubble) return;
@@ -81,7 +81,7 @@ function StudioLayout() {
     const run = async () => {
       if (handoff === "demo") await loadDemo();
       else await loadFile(handoff);
-      void navigate({ to: "/studio/batch" });
+      void navigate({ href: "/studio/setup" });
     };
     void run();
   }, [loadDemo, loadFile, navigate]);
@@ -89,7 +89,7 @@ function StudioLayout() {
   useEffect(() => {
     if (audioUrl) return;
     if (pathname === "/studio" || pathname === "/studio/") return;
-    void navigate({ to: "/studio" });
+    void navigate({ href: "/studio" });
   }, [audioUrl, navigate, pathname]);
 
   return (

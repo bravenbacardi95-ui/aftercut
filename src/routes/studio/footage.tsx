@@ -12,7 +12,7 @@ function FootageRoute() {
   const navigate = useNavigate();
   useEffect(() => {
     if (mode !== "single") return;
-    void navigate({ to: "/studio/editor", replace: true });
+    void navigate({ href: "/studio/editor", replace: true });
   }, [mode, navigate]);
   if (mode === "single") return null;
   return <FootageWindow />;

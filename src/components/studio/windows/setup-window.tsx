@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LyricEditor } from "@/components/studio/lyric-editor";
 import { RegionScrubber } from "@/components/studio/region-scrubber";
@@ -10,7 +11,7 @@ import { formatTime } from "@/lib/studio/beats";
 import { useStudioLayout } from "@/lib/studio/layout";
 import { resolveCutClips } from "@/lib/studio/packs";
 import { useStudio } from "@/lib/studio/store";
-import { playWordsWithClicks } from "@/lib/studio/click-track";
+import { playWordsWithClicks, stopClicks } from "@/lib/studio/click-track";
 import { prepareVocalStem } from "@/lib/studio/vocal-stem";
 
 export function SetupWindow() {
@@ -48,11 +49,11 @@ export function SetupWindow() {
           const state = useStudio.getState();
           if (!state.recipes.some((recipe) => recipe.id === "single") && state.clips().length) state.makeSingle();
           setStep("edit");
-          void navigate({ to: "/studio/editor" });
+          void navigate({ href: "/studio/editor" });
           return;
         }
         setStep("footage");
-        void navigate({ to: "/studio/footage" });
+        void navigate({ href: "/studio/footage" });
       }}
     />
   );
@@ -144,6 +145,7 @@ function VocalIsolate() {
   const [note, setNote] = useState<string | null>(null);
   const [noteError, setNoteError] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [playing, setPlaying] = useState(false);
 
   const solo = async () => {
     setBusy(true);
@@ -166,14 +168,17 @@ function VocalIsolate() {
     }
     const player = new Audio(stem.url);
     player.onended = () => {
+      setPlaying(false);
       setNote("Isolated vocal is ready.");
       setNoteError(false);
     };
     try {
       await player.play();
+      setPlaying(true);
       setNote(stem.cached ? "Playing the saved vocal stem." : "Playing the isolated vocal.");
       setNoteError(false);
     } catch {
+      setPlaying(false);
       setNote("Couldn’t play the vocal stem.");
       setNoteError(true);
     }
@@ -201,8 +206,17 @@ function VocalIsolate() {
       </label>
       <p className="text-xs text-muted">Off by default. Applies on the next sync. At most 40 ms earlier or later, and only on the isolated vocal.</p>
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={() => void solo()} disabled={busy || transcribing}>
-          {busy ? "Isolating…" : "Solo vocal"}
+        <Button
+          type="button"
+          variant={playing || busy ? "primary" : "secondary"}
+          size="sm"
+          aria-pressed={playing}
+          aria-busy={busy}
+          onClick={() => void solo()}
+          disabled={busy || transcribing}
+        >
+          {busy ? <LoaderCircle className="size-4 animate-spin" /> : null}
+          {busy ? "Isolating…" : playing ? "Playing vocal" : "Solo vocal"}
         </Button>
         {note ? (
           <p className={noteError ? "text-xs text-danger" : "text-xs text-muted"} role={noteError ? "alert" : "status"}>
@@ -234,6 +248,7 @@ function PasteLyrics() {
       words.length &&
       (Math.abs(last.start - region.start) > 0.08 || Math.abs(last.end - region.end) > 0.08),
   );
+  const [clicks, setClicks] = useState<"idle" | "playing">("idle");
   const percent = syncProgress == null ? null : Math.max(0, Math.min(100, syncProgress));
 
   return (
@@ -281,12 +296,21 @@ function PasteLyrics() {
       <div className="mt-2">
         <Button
           type="button"
-          variant="secondary"
+          variant={clicks === "playing" ? "primary" : "secondary"}
           size="sm"
+          aria-pressed={clicks === "playing"}
           disabled={!words.length || transcribing}
-          onClick={() => void playWordsWithClicks(words, region)}
+          onClick={() => {
+            if (clicks === "playing") {
+              stopClicks();
+              setClicks("idle");
+              return;
+            }
+            setClicks("playing");
+            void playWordsWithClicks(words, region).finally(() => setClicks("idle"));
+          }}
         >
-          Play with clicks
+          {clicks === "playing" ? "Playing clicks" : "Play with clicks"}
         </Button>
       </div>
       {transcribing ? (

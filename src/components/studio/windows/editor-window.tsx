@@ -32,16 +32,6 @@ export function EditorWindow() {
   const trackName = useStudio((s) => s.trackName);
   const captionPrefs = useStudio((s) => s.captionPrefs);
   const setCaptionPrefs = useStudio((s) => s.setCaptionPrefs);
-  const fonts = useStudio((s) => s.fonts);
-  const captionStyles = useStudio((s) => s.captionStyles);
-  const captionEffects = useStudio((s) => s.captionEffects);
-  const looks = useStudio((s) => s.looks);
-  const framings = useStudio((s) => s.framings);
-  const toggleFont = useStudio((s) => s.toggleFont);
-  const toggleStyle = useStudio((s) => s.toggleStyle);
-  const toggleEffect = useStudio((s) => s.toggleEffect);
-  const toggleLook = useStudio((s) => s.toggleLook);
-  const toggleFraming = useStudio((s) => s.toggleFraming);
   const timelineH = useStudioLayout((s) => s.timelineH);
   const previewW = useStudioLayout((s) => s.previewW);
   const inspectorW = useStudioLayout((s) => s.inspectorW);
@@ -90,9 +80,6 @@ export function EditorWindow() {
     }
   };
 
-  const sizes: CaptionSizeId[] = ["s", "m", "l"];
-  const positions: CaptionPosId[] = ["top", "mid", "low"];
-  const cases: CaptionCaseId[] = ["as-is", "upper"];
   const styleTarget = selected ?? recipe;
 
   return (
@@ -104,11 +91,11 @@ export function EditorWindow() {
           onClick={() => {
             if (mode === "single") {
               setStep("setup");
-              void navigate({ to: "/studio/batch" });
+              void navigate({ href: "/studio/setup" });
               return;
             }
             setStep("wall");
-            void navigate({ to: "/studio/wall" });
+            void navigate({ href: "/studio/wall" });
           }}
         >
           <ChevronLeft className="size-4" />
@@ -138,84 +125,31 @@ export function EditorWindow() {
                 </section>
               </SplitPane>
               <aside className="h-full overflow-y-scroll p-3">
-            {styleTarget ? (
-              <div className="flex flex-col gap-5">
-                <ChipGroup label="Font">
-                  {CAPTION_FONTS.map((s) => (
-                    <Chip key={s.id} active={fonts[0] === s.id} onClick={() => toggleFont(s.id)}>
-                      {s.name}
-                    </Chip>
-                  ))}
-                </ChipGroup>
-                <p className="text-xs text-subtle">
-                  One font at a time. Brat is lime Arial Narrow on top of the footage. Clean, Editorial, and Poster replace it.
-                </p>
-                <ChipGroup label="Effect">
-                  {CAPTION_EFFECTS.map((s) => (
-                    <Chip key={s.id} active={captionEffects.includes(s.id)} onClick={() => toggleEffect(s.id)}>
-                      {s.name}
-                    </Chip>
-                  ))}
-                </ChipGroup>
-                <ChipGroup label="Animation">
-                  {CAPTION_STYLES.map((s) => (
-                    <Chip key={s.id} active={captionStyles.includes(s.id)} onClick={() => toggleStyle(s.id)}>
-                      {s.name}
-                    </Chip>
-                  ))}
-                </ChipGroup>
-                <ChipGroup label="Size">
-                  {sizes.map((id) => (
-                    <Chip key={id} active={captionPrefs.size === id} onClick={() => setCaptionPrefs({ size: id })}>
-                      {captionSizeLabel(id)}
-                    </Chip>
-                  ))}
-                </ChipGroup>
-                <ChipGroup label="Position">
-                  {positions.map((id) => (
-                    <Chip key={id} active={captionPrefs.position === id} onClick={() => setCaptionPrefs({ position: id })}>
-                      {captionPosLabel(id)}
-                    </Chip>
-                  ))}
-                </ChipGroup>
-                <ChipGroup label="Case">
-                  {cases.map((id) => (
-                    <Chip key={id} active={captionPrefs.textCase === id} onClick={() => setCaptionPrefs({ textCase: id })}>
-                      {captionCaseLabel(id)}
-                    </Chip>
-                  ))}
-                </ChipGroup>
-                <ChipGroup label="Look">
-                  {LOOKS.map((s) => (
-                    <Chip key={s.id} active={looks.includes(s.id)} onClick={() => toggleLook(s.id)}>
-                      {s.name}
-                    </Chip>
-                  ))}
-                </ChipGroup>
-                <ChipGroup label="Framing">
-                  {FRAMINGS.map((s) => (
-                    <Chip key={s.id} active={framings.includes(s.id)} onClick={() => toggleFraming(s.id)}>
-                      {s.name}
-                    </Chip>
-                  ))}
-                </ChipGroup>
-                <Button type="button" onClick={() => void onExport()} disabled={busy}>
-                  <Download className="size-4" />
-                  {busy ? `Exporting ${Math.round(progress * 100)}%` : "Export video"}
-                </Button>
-                {message ? <p className="text-sm text-muted">{message}</p> : null}
-                <p className="flex items-center gap-2 text-xs text-subtle">
-                  <Film className="size-3.5" />
-                  Recorded in this browser. No monthly export count.
-                </p>
-              </div>
-            ) : (
-              <p className="text-sm text-muted">Open a version from the wall to restyle it.</p>
-            )}
-          </aside>
+                <StyleInspector
+                  recipe={styleTarget}
+                  captionPrefs={captionPrefs}
+                  setCaptionPrefs={setCaptionPrefs}
+                  busy={busy}
+                  progress={progress}
+                  message={message}
+                  onExport={() => void onExport()}
+                  onChange={(patch) => updateSelected(patch)}
+                />
+              </aside>
             </SplitPane>
           </div>
-          <div className="h-full overflow-y-auto p-3 lg:hidden">
+          <div className="flex h-full flex-col gap-3 overflow-y-auto p-3 lg:hidden">
+            <PhonePreview recipe={recipe} className="mx-auto h-[34vh] w-auto max-w-full" />
+            <StyleInspector
+              recipe={styleTarget}
+              captionPrefs={captionPrefs}
+              setCaptionPrefs={setCaptionPrefs}
+              busy={busy}
+              progress={progress}
+              message={message}
+              onExport={() => void onExport()}
+              onChange={(patch) => updateSelected(patch)}
+            />
             <LyricEditor />
           </div>
         </div>
@@ -233,4 +167,104 @@ export function EditorWindow() {
 
 function slug(name: string) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "aftercut";
+}
+
+function StyleInspector({
+  recipe,
+  captionPrefs,
+  setCaptionPrefs,
+  busy,
+  progress,
+  message,
+  onExport,
+  onChange,
+}: {
+  recipe: {
+    font: string;
+    captionStyle: string;
+    effect: string;
+    look: string;
+    framing: string;
+  } | null;
+  captionPrefs: { size: CaptionSizeId; position: CaptionPosId; textCase: CaptionCaseId };
+  setCaptionPrefs: (patch: Partial<{ size: CaptionSizeId; position: CaptionPosId; textCase: CaptionCaseId }>) => void;
+  busy: boolean;
+  progress: number;
+  message: string | null;
+  onExport: () => void;
+  onChange: (patch: Partial<{ font: "brat" | "clean" | "editorial" | "poster"; captionStyle: "word" | "line" | "karaoke" | "typewriter"; effect: "none" | "outline" | "boxed"; look: "clean" | "film" | "crush" | "cool" | "fade"; framing: "fill" | "offset" | "letterbox" | "punch" }>) => void;
+}) {
+  const sizes: CaptionSizeId[] = ["s", "m", "l"];
+  const positions: CaptionPosId[] = ["top", "mid", "low"];
+  const cases: CaptionCaseId[] = ["as-is", "upper"];
+  if (!recipe) return <p className="text-sm text-muted">Open a version from the wall to restyle it.</p>;
+  return (
+    <div className="flex flex-col gap-5">
+      <Button type="button" onClick={onExport} disabled={busy || !recipe}>
+        <Download className="size-4" />
+        {busy ? `Exporting ${Math.round(progress * 100)}%` : "Export video"}
+      </Button>
+      {message ? <p className="text-sm text-muted">{message}</p> : null}
+      <ChipGroup label="Font">
+        {CAPTION_FONTS.map((s) => (
+          <Chip key={s.id} active={recipe.font === s.id} onClick={() => onChange({ font: s.id })}>
+            {s.name}
+          </Chip>
+        ))}
+      </ChipGroup>
+      <ChipGroup label="Effect">
+        {CAPTION_EFFECTS.map((s) => (
+          <Chip key={s.id} active={recipe.effect === s.id} onClick={() => onChange({ effect: s.id })}>
+            {s.name}
+          </Chip>
+        ))}
+      </ChipGroup>
+      <ChipGroup label="Animation">
+        {CAPTION_STYLES.map((s) => (
+          <Chip key={s.id} active={recipe.captionStyle === s.id} onClick={() => onChange({ captionStyle: s.id })}>
+            {s.name}
+          </Chip>
+        ))}
+      </ChipGroup>
+      <ChipGroup label="Size">
+        {sizes.map((id) => (
+          <Chip key={id} active={captionPrefs.size === id} onClick={() => setCaptionPrefs({ size: id })}>
+            {captionSizeLabel(id)}
+          </Chip>
+        ))}
+      </ChipGroup>
+      <ChipGroup label="Position">
+        {positions.map((id) => (
+          <Chip key={id} active={captionPrefs.position === id} onClick={() => setCaptionPrefs({ position: id })}>
+            {captionPosLabel(id)}
+          </Chip>
+        ))}
+      </ChipGroup>
+      <ChipGroup label="Case">
+        {cases.map((id) => (
+          <Chip key={id} active={captionPrefs.textCase === id} onClick={() => setCaptionPrefs({ textCase: id })}>
+            {captionCaseLabel(id)}
+          </Chip>
+        ))}
+      </ChipGroup>
+      <ChipGroup label="Look">
+        {LOOKS.map((s) => (
+          <Chip key={s.id} active={recipe.look === s.id} onClick={() => onChange({ look: s.id })}>
+            {s.name}
+          </Chip>
+        ))}
+      </ChipGroup>
+      <ChipGroup label="Framing">
+        {FRAMINGS.map((s) => (
+          <Chip key={s.id} active={recipe.framing === s.id} onClick={() => onChange({ framing: s.id })}>
+            {s.name}
+          </Chip>
+        ))}
+      </ChipGroup>
+      <p className="flex items-center gap-2 text-xs text-subtle">
+        <Film className="size-3.5" />
+        Changes stay on this version. Export records in this browser.
+      </p>
+    </div>
+  );
 }

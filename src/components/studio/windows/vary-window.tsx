@@ -1,9 +1,11 @@
+import { useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Chip, ChipGroup, PhonePreview, Transport, useLivePreview } from "@/components/studio/studio-ui";
 import { SplitPane } from "@/components/studio/split-pane";
 import { BATCH_SIZES, CAPTION_EFFECTS, CAPTION_FONTS, CAPTION_STYLES, FRAMINGS, LOOKS, PACINGS } from "@/lib/studio/packs";
+import { buildRecipes, uniqueRecipeCount } from "@/lib/studio/recipes";
 import { useStudioLayout } from "@/lib/studio/layout";
 import { useStudio } from "@/lib/studio/store";
 import { cn } from "@/lib/utils";
@@ -23,6 +25,9 @@ export function VaryWindow() {
   const toggleFraming = useStudio((s) => s.toggleFraming);
   const setPacing = useStudio((s) => s.setPacing);
   const setBatchSize = useStudio((s) => s.setBatchSize);
+  const analysis = useStudio((s) => s.analysis);
+  const region = useStudio((s) => s.region);
+  const selectedClipIds = useStudio((s) => s.selectedClipIds);
   const generate = useStudio((s) => s.generate);
   const generating = useStudio((s) => s.generating);
   const setStep = useStudio((s) => s.setStep);
@@ -33,8 +38,25 @@ export function VaryWindow() {
 
   const build = () => {
     generate();
-    void navigate({ to: "/studio/wall" });
+    void navigate({ href: "/studio/wall" });
   };
+  const unique = useMemo(() => {
+    if (!analysis) return 0;
+    return uniqueRecipeCount(
+      buildRecipes({
+        count: batchSize,
+        styles: captionStyles,
+        fonts,
+        effects: captionEffects,
+        looks,
+        framings,
+        pacing,
+        clipIds: selectedClipIds.length ? selectedClipIds : ["clip"],
+        region,
+        analysis,
+      }),
+    );
+  }, [analysis, batchSize, captionEffects, captionStyles, fonts, framings, looks, pacing, region, selectedClipIds]);
 
   return (
     <SplitPane axis="x" size={previewW} onChange={setPreviewW} min={160} max={560} className="h-full">
@@ -45,7 +67,7 @@ export function VaryWindow() {
             className="inline-flex items-center gap-1 text-sm text-muted hover:text-fg"
             onClick={() => {
               setStep("footage");
-              void navigate({ to: "/studio/footage" });
+              void navigate({ href: "/studio/footage" });
             }}
           >
             <ChevronLeft className="size-4" />
@@ -59,12 +81,15 @@ export function VaryWindow() {
           </div>
           <ChipGroup label="Font">
             {CAPTION_FONTS.map((s) => (
-              <Chip key={s.id} active={fonts[0] === s.id} onClick={() => toggleFont(s.id)}>
+              <Chip key={s.id} active={fonts.includes(s.id)} onClick={() => toggleFont(s.id)}>
                 {s.name}
               </Chip>
             ))}
           </ChipGroup>
-          <p className="text-xs text-subtle">One font only — the preview uses it immediately. Effect, animation, look, and framing can stay combined for the wall. The preview shows the last one you clicked.</p>
+          <p className="text-xs text-subtle">
+            Fonts add and remove. Each version is its own font, style, look, framing, cut pattern, and clip order. This batch will be {unique} unique
+            {unique === batchSize ? "." : ` of ${batchSize}.`}
+          </p>
           <ChipGroup label="Effect">
             {CAPTION_EFFECTS.map((s) => (
               <Chip key={s.id} active={captionEffects.includes(s.id)} onClick={() => toggleEffect(s.id)}>

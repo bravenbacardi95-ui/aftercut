@@ -71,15 +71,15 @@ function vignetteOverlay(w: number, h: number, amount: number): HTMLCanvasElemen
 function lookFilter(look: LookId): { filter: string; wash: string; washAlpha: number; grain: number; vignette: number } {
   switch (look) {
     case "film":
-      return { filter: "contrast(1.04) saturate(0.96)", wash: "#c9a882", washAlpha: 0.06, grain: 0, vignette: 0.22 };
+      return { filter: "contrast(1.08) saturate(0.92) sepia(0.18)", wash: "#c9a882", washAlpha: 0.08, grain: 0.22, vignette: 0.28 };
     case "crush":
-      return { filter: "contrast(1.12) saturate(0.9)", wash: "#000000", washAlpha: 0.04, grain: 0, vignette: 0.28 };
+      return { filter: "contrast(1.28) saturate(0.72)", wash: "#000000", washAlpha: 0.08, grain: 0.34, vignette: 0.36 };
     case "cool":
-      return { filter: "contrast(1.04) saturate(0.86)", wash: "#6a8a96", washAlpha: 0.08, grain: 0, vignette: 0.2 };
+      return { filter: "contrast(1.06) saturate(0.78) hue-rotate(12deg)", wash: "#6a8a96", washAlpha: 0.1, grain: 0.16, vignette: 0.24 };
     case "fade":
-      return { filter: "contrast(0.94) brightness(1.04) saturate(0.92)", wash: "#d8cfc0", washAlpha: 0.06, grain: 0, vignette: 0.12 };
+      return { filter: "contrast(0.88) brightness(1.08) saturate(0.86)", wash: "#d8cfc0", washAlpha: 0.1, grain: 0.12, vignette: 0.16 };
     default:
-      return { filter: "none", wash: "#000000", washAlpha: 0, grain: 0, vignette: 0.12 };
+      return { filter: "contrast(1.02) saturate(1.02)", wash: "#000000", washAlpha: 0, grain: 0.06, vignette: 0.14 };
   }
 }
 
@@ -187,11 +187,15 @@ function drawCaption(
   }, null);
   if (!current) return;
   const mul = sizeMul(prefs.size);
-  const baseY = captionY(prefs.position, "word", h);
+  const baseY = captionY(prefs.position, layout, h);
   const face = fontFace(font);
   const fill = font === "brat" ? "#8ACE00" : "#f2efe8";
   const padX = w * 0.06;
   const maxW = w - padX * 2;
+  if (layout === "line" || layout === "karaoke") {
+    drawPhrase(ctx, layout, font, effect, words, t, w, prefs, quality, fill, baseY, maxW, mul);
+    return;
+  }
   let display = current.text.trim() || line.text;
   if (layout === "typewriter") {
     const span = Math.max(0.05, current.end - current.start);
@@ -273,6 +277,57 @@ function fillTracked(ctx: CanvasRenderingContext2D, text: string, x: number, y: 
   });
 }
 
+function drawPhrase(
+  ctx: CanvasRenderingContext2D,
+  layout: CaptionStyleId,
+  font: CaptionFontId,
+  effect: CaptionEffectId,
+  words: LyricWord[],
+  t: number,
+  w: number,
+  prefs: CaptionPrefs,
+  quality: "preview" | "export",
+  fill: string,
+  y: number,
+  maxW: number,
+  mul: number,
+) {
+  const labels = words.map((wd) => applyCase(wd.text, font, prefs.textCase));
+  const phrase = labels.join(" ");
+  if (effect === "boxed") drawBoxPlate(ctx, phrase, w, y, mul, font, maxW);
+  if (layout === "karaoke") {
+    drawKaraoke(ctx, words, t, w, y, mul, prefs, font, quality, fill, effect === "outline");
+    return;
+  }
+  const dim = font === "brat" ? "rgba(138,206,0,0.4)" : "rgba(242,239,232,0.42)";
+  const fontPx = fitFont(ctx, phrase, maxW, Math.round(w * 0.072 * mul), font);
+  ctx.font = fontCss(fontPx, font);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  const gap = w * 0.018;
+  const widths = labels.map((lb) => ctx.measureText(lb).width);
+  const total = widths.reduce((a, b) => a + b, 0) + gap * Math.max(0, labels.length - 1);
+  let x = w / 2 - total / 2;
+  const face = fontFace(font);
+  ctx.save();
+  ctx.translate(0, y);
+  ctx.scale(1, face.yScale);
+  words.forEach((wd, i) => {
+    const current = t >= wd.start && t < wd.end;
+    const label = labels[i] ?? "";
+    ctx.lineJoin = "round";
+    if (effect === "outline" || current) {
+      ctx.lineWidth = Math.max(current ? 5 : 3, w * (current ? 0.012 : 0.007));
+      ctx.strokeStyle = "#0b0b0c";
+      ctx.strokeText(label, x, 0);
+    }
+    ctx.fillStyle = current ? fill : dim;
+    ctx.fillText(label, x, 0);
+    x += (widths[i] ?? 0) + gap;
+  });
+  ctx.restore();
+}
+
 function drawKaraoke(
   ctx: CanvasRenderingContext2D,
   words: LyricWord[],
@@ -301,23 +356,44 @@ function drawKaraoke(
   }
   let x = w / 2 - total / 2;
   ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
   ctx.shadowColor = "rgba(0,0,0,0.55)";
   ctx.shadowBlur = quality === "export" ? 10 : 0;
   ctx.lineJoin = "round";
+  const dim = font === "brat" ? "rgba(138,206,0,0.35)" : "rgba(242,239,232,0.38)";
+  const face = fontFace(font);
+  ctx.save();
+  ctx.translate(0, y);
+  ctx.scale(1, face.yScale);
   words.forEach((wd, i) => {
-    const state = t >= wd.start && t < wd.end ? "current" : "idle";
-    if (state !== "current") return;
-    const color = fill;
     const label = labels[i] ?? "";
+    const wordW = widths[i] ?? 0;
+    const span = Math.max(0.05, wd.end - wd.start);
+    const progress = t >= wd.end ? 1 : t >= wd.start ? Math.max(0, Math.min(1, (t - wd.start) / span)) : 0;
+    ctx.fillStyle = dim;
     if (outline) {
-      ctx.lineWidth = Math.max(4, w * 0.012);
+      ctx.lineWidth = Math.max(3, w * 0.008);
       ctx.strokeStyle = "#0b0b0c";
-      ctx.strokeText(label, x, y);
+      ctx.strokeText(label, x, 0);
     }
-    ctx.fillStyle = color;
-    ctx.fillText(label, x, y);
-    x += (widths[i] ?? 0) + gap;
+    ctx.fillText(label, x, 0);
+    if (progress > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x - 1, -fontPx, wordW * progress + 2, fontPx * 2.4);
+      ctx.clip();
+      if (outline) {
+        ctx.lineWidth = Math.max(4, w * 0.012);
+        ctx.strokeStyle = "#0b0b0c";
+        ctx.strokeText(label, x, 0);
+      }
+      ctx.fillStyle = fill;
+      ctx.fillText(label, x, 0);
+      ctx.restore();
+    }
+    x += wordW + gap;
   });
+  ctx.restore();
 }
 
 function sourceSize(el: CanvasImageSource): { sw: number; sh: number } {
@@ -353,9 +429,13 @@ export function drawFrame(
     const clip = clipForRecipe(recipe, clips, time) ?? clips[0];
     const look = lookFilter(recipe.look);
     const fr = frameRect(recipe.framing, width, height, time, recipe.seed);
-    const kenZoom = 1;
-    const kenX = 0;
-    const kenY = 0;
+    const t0 = recipe.cuts[0] ?? 0;
+    const t1 = recipe.cuts[recipe.cuts.length - 1] ?? t0 + 1;
+    const kenP = Math.max(0, Math.min(1, (time - t0) / Math.max(0.001, t1 - t0)));
+    const kenDir = (recipe.seed & 1) === 0 ? 1 : -1;
+    const kenZoom = 1 + 0.08 * (kenDir > 0 ? kenP : 1 - kenP);
+    const kenX = (((recipe.seed % 7) - 3) / 3) * width * 0.045 * kenP;
+    const kenY = ((((recipe.seed >> 3) % 5) - 2) / 2) * height * 0.02 * kenP;
 
     ctx.save();
     if (recipe.framing === "letterbox") {
@@ -363,7 +443,7 @@ export function drawFrame(
       ctx.rect(fr.x, fr.y, fr.w, fr.h);
       ctx.clip();
     }
-    if (quality === "export") ctx.filter = look.filter;
+    if (look.filter !== "none") ctx.filter = look.filter;
 
     if (clip) {
       if (clip.kind === "video") {
@@ -399,10 +479,15 @@ export function drawFrame(
       ctx.globalAlpha = 1;
     }
 
-    if (look.grain > 0 && quality === "export") {
-      ctx.globalAlpha = look.grain;
-      ctx.drawImage(grain(), 0, 0, width, height);
-      ctx.globalAlpha = 1;
+    if (look.grain > 0) {
+      ctx.save();
+      ctx.globalAlpha = quality === "preview" ? look.grain * 0.85 : look.grain;
+      const tile = grain();
+      const size = quality === "preview" ? 128 : 96;
+      for (let y = 0; y < height; y += size) {
+        for (let x = 0; x < width; x += size) ctx.drawImage(tile, x, y, size, size);
+      }
+      ctx.restore();
     }
 
     if (look.vignette > 0) {

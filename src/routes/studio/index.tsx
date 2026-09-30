@@ -20,13 +20,13 @@ function StudioHome() {
   const [over, setOver] = useState(false);
 
   useEffect(() => {
-    if (audioUrl) void navigate({ to: "/studio/batch" });
+    if (audioUrl) void navigate({ href: "/studio/setup" });
   }, [audioUrl, navigate]);
 
   const go = async (file: File | "demo") => {
     if (file === "demo") await loadDemo();
     else await loadFile(file);
-    void navigate({ to: "/studio/batch" });
+    void navigate({ href: "/studio/setup" });
   };
 
   return (
@@ -56,7 +56,7 @@ function StudioHome() {
         <Upload className="mx-auto size-6 text-muted" />
         <h1 className="mt-4 font-serif text-3xl tracking-tight">Drop a track</h1>
         <p className="mt-2 text-sm text-muted">
-          MP3, WAV, FLAC or M4A. Vocals are transcribed, then you click through Setup, Footage, Variations, Wall, and Editor.
+          MP3, WAV, FLAC or M4A. Then set the snippet, paste or transcribe the lyrics, and cut the video.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           {status ? (

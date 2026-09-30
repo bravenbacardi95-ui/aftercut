@@ -22,9 +22,11 @@ function About() {
             basic plan at sixty exports a month. That is the part we did not keep.
           </p>
           <p>
-            Drop a track and the studio transcribes the vocal into the lyric editor — demo words are not reused.
-            Every word lands on a timeline you can stretch, rewrite, add, or delete. Brat, Clean, Editorial, and
-            Poster type sit next to the caption styles. Beat detection, packs, and export still run in this browser.
+            Drop a track, set the snippet, then paste the lyrics or press Transcribe. Cloud speech-to-text runs on the
+            isolated vocal; if that service is down, the same stem is heard in the browser. Sample lyrics are never
+            filled in. Every word lands on a timeline you can stretch, rewrite, add, or delete. Brat, Clean, Editorial,
+            and Poster sit next to one-word, whole-line, karaoke, and typewriter captions. Beat detection, packs, and
+            export still run in this browser — one video, or the whole wall as a zip.
           </p>
           <p>Built for everything after the music is made.</p>
         </div>

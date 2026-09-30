@@ -13,9 +13,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as StudioIndexRouteImport } from './routes/studio/index'
-import { Route as StudioBatchRouteImport } from './routes/studio/batch'
 import { Route as StudioEditorRouteImport } from './routes/studio/editor'
 import { Route as StudioFootageRouteImport } from './routes/studio/footage'
+import { Route as StudioSetupRouteImport } from './routes/studio/setup'
 import { Route as StudioVaryRouteImport } from './routes/studio/vary'
 import { Route as StudioWallRouteImport } from './routes/studio/wall'
 
@@ -39,11 +39,6 @@ const StudioIndexRoute = StudioIndexRouteImport.update({
   path: '/',
   getParentRoute: () => StudioRoute,
 } as any)
-const StudioBatchRoute = StudioBatchRouteImport.update({
-  id: '/batch',
-  path: '/batch',
-  getParentRoute: () => StudioRoute,
-} as any)
 const StudioEditorRoute = StudioEditorRouteImport.update({
   id: '/editor',
   path: '/editor',
@@ -52,6 +47,11 @@ const StudioEditorRoute = StudioEditorRouteImport.update({
 const StudioFootageRoute = StudioFootageRouteImport.update({
   id: '/footage',
   path: '/footage',
+  getParentRoute: () => StudioRoute,
+} as any)
+const StudioSetupRoute = StudioSetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
   getParentRoute: () => StudioRoute,
 } as any)
 const StudioVaryRoute = StudioVaryRouteImport.update({
@@ -69,9 +69,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/studio': typeof StudioRouteWithChildren
-  '/studio/batch': typeof StudioBatchRoute
   '/studio/editor': typeof StudioEditorRoute
   '/studio/footage': typeof StudioFootageRoute
+  '/studio/setup': typeof StudioSetupRoute
   '/studio/vary': typeof StudioVaryRoute
   '/studio/wall': typeof StudioWallRoute
   '/studio/': typeof StudioIndexRoute
@@ -79,9 +79,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
-  '/studio/batch': typeof StudioBatchRoute
   '/studio/editor': typeof StudioEditorRoute
   '/studio/footage': typeof StudioFootageRoute
+  '/studio/setup': typeof StudioSetupRoute
   '/studio/vary': typeof StudioVaryRoute
   '/studio/wall': typeof StudioWallRoute
   '/studio': typeof StudioIndexRoute
@@ -91,9 +91,9 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/studio': typeof StudioRouteWithChildren
-  '/studio/batch': typeof StudioBatchRoute
   '/studio/editor': typeof StudioEditorRoute
   '/studio/footage': typeof StudioFootageRoute
+  '/studio/setup': typeof StudioSetupRoute
   '/studio/vary': typeof StudioVaryRoute
   '/studio/wall': typeof StudioWallRoute
   '/studio/': typeof StudioIndexRoute
@@ -104,9 +104,9 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/studio'
-    | '/studio/batch'
     | '/studio/editor'
     | '/studio/footage'
+    | '/studio/setup'
     | '/studio/vary'
     | '/studio/wall'
     | '/studio/'
@@ -114,9 +114,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about'
-    | '/studio/batch'
     | '/studio/editor'
     | '/studio/footage'
+    | '/studio/setup'
     | '/studio/vary'
     | '/studio/wall'
     | '/studio'
@@ -125,9 +125,9 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/studio'
-    | '/studio/batch'
     | '/studio/editor'
     | '/studio/footage'
+    | '/studio/setup'
     | '/studio/vary'
     | '/studio/wall'
     | '/studio/'
@@ -169,13 +169,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StudioIndexRouteImport
       parentRoute: typeof StudioRoute
     }
-    '/studio/batch': {
-      id: '/studio/batch'
-      path: '/batch'
-      fullPath: '/studio/batch'
-      preLoaderRoute: typeof StudioBatchRouteImport
-      parentRoute: typeof StudioRoute
-    }
     '/studio/editor': {
       id: '/studio/editor'
       path: '/editor'
@@ -188,6 +181,13 @@ declare module '@tanstack/react-router' {
       path: '/footage'
       fullPath: '/studio/footage'
       preLoaderRoute: typeof StudioFootageRouteImport
+      parentRoute: typeof StudioRoute
+    }
+    '/studio/setup': {
+      id: '/studio/setup'
+      path: '/setup'
+      fullPath: '/studio/setup'
+      preLoaderRoute: typeof StudioSetupRouteImport
       parentRoute: typeof StudioRoute
     }
     '/studio/vary': {
@@ -208,18 +208,18 @@ declare module '@tanstack/react-router' {
 }
 
 interface StudioRouteChildren {
-  StudioBatchRoute: typeof StudioBatchRoute
   StudioEditorRoute: typeof StudioEditorRoute
   StudioFootageRoute: typeof StudioFootageRoute
+  StudioSetupRoute: typeof StudioSetupRoute
   StudioVaryRoute: typeof StudioVaryRoute
   StudioWallRoute: typeof StudioWallRoute
   StudioIndexRoute: typeof StudioIndexRoute
 }
 
 const StudioRouteChildren: StudioRouteChildren = {
-  StudioBatchRoute: StudioBatchRoute,
   StudioEditorRoute: StudioEditorRoute,
   StudioFootageRoute: StudioFootageRoute,
+  StudioSetupRoute: StudioSetupRoute,
   StudioVaryRoute: StudioVaryRoute,
   StudioWallRoute: StudioWallRoute,
   StudioIndexRoute: StudioIndexRoute,

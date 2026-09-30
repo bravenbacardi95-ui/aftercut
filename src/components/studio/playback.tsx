@@ -132,8 +132,10 @@ export function PlaybackProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const el = e.target instanceof Element ? e.target : null;
+      const tag = el?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el instanceof HTMLElement && el.isContentEditable)) return;
+      if (el?.closest("button, a, [role='button']")) return;
       if (e.code === "Space") {
         e.preventDefault();
         void toggle();

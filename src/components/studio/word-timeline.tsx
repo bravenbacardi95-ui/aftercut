@@ -3,6 +3,7 @@ import { Magnet, Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatPrecise } from "@/lib/studio/beats";
 import { wordsInRegion } from "@/lib/studio/lyrics";
+import { useStudioLayout } from "@/lib/studio/layout";
 import { useStudio } from "@/lib/studio/store";
 import { downsampleEnergy } from "@/lib/studio/waveform";
 import { cn } from "@/lib/utils";
@@ -28,13 +29,14 @@ export function WordTimeline() {
   const updateWordText = useStudio((s) => s.updateWordText);
   const snapEnabled = useStudio((s) => s.snapEnabled);
   const setSnapEnabled = useStudio((s) => s.setSnapEnabled);
+  const zoom = useStudioLayout((s) => s.timelineZoom);
+  const setZoom = useStudioLayout((s) => s.setTimelineZoom);
   const transcribing = useStudio((s) => s.transcribing);
   const { seek, timeRef } = usePlayback();
 
   const scroller = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
   const playhead = useRef<HTMLDivElement>(null);
-  const [zoom, setZoom] = useState(2);
   const [width, setWidth] = useState(640);
   const drag = useRef<null | {
     id: string;
@@ -162,8 +164,8 @@ export function WordTimeline() {
   }, [timeRef]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2 md:px-4">
+    <div className="relative z-30 flex h-full min-h-0 flex-col overflow-hidden bg-surface">
+      <div className="relative z-30 flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-surface px-3 py-2 md:px-4">
         <p className="text-xs font-medium uppercase tracking-[0.14em] text-subtle">Word timeline</p>
         <span className="text-xs text-subtle">
           {transcribing ? "Hearing lyrics…" : "Double-click to edit. ⌘X removes the selected word. ⌘D duplicates it."}
@@ -172,21 +174,45 @@ export function WordTimeline() {
           <Button
             type="button"
             size="sm"
-            variant={snapEnabled ? "secondary" : "ghost"}
+            variant={snapEnabled ? "primary" : "ghost"}
+            aria-pressed={snapEnabled}
+            data-snap={snapEnabled ? "on" : "off"}
             onClick={() => setSnapEnabled(!snapEnabled)}
           >
             <Magnet className="size-4" />
-            Snap
+            {snapEnabled ? "Snap on" : "Snap off"}
           </Button>
           <Button type="button" size="sm" variant="ghost" onClick={() => addWordAt(timeRef.current)}>
             <Plus className="size-4" />
             Add word
           </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setZoom((z) => Math.max(1, z - 0.5))} disabled={zoom <= 1}>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-label="Zoom out"
+            onClick={(e) => {
+              e.stopPropagation();
+              setZoom(Math.max(1, Math.round((zoom - 0.5) * 10) / 10));
+            }}
+            disabled={zoom <= 1}
+          >
             <Minus className="size-4" />
           </Button>
-          <span className="w-10 text-center font-mono text-xs tabular-nums text-muted">{zoom.toFixed(1)}x</span>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setZoom((z) => Math.min(6, z + 0.5))} disabled={zoom >= 6}>
+          <span className="w-12 text-center font-mono text-xs tabular-nums text-muted" data-zoom={zoom.toFixed(1)}>
+            {zoom.toFixed(1)}x
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            aria-label="Zoom in"
+            onClick={(e) => {
+              e.stopPropagation();
+              setZoom(Math.min(6, Math.round((zoom + 0.5) * 10) / 10));
+            }}
+            disabled={zoom >= 6}
+          >
             <Plus className="size-4" />
           </Button>
         </div>

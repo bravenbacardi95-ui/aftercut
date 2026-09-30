@@ -5,10 +5,12 @@ type Layout = {
   previewW: number;
   inspectorW: number;
   cutH: number;
+  timelineZoom: number;
   setTimelineH: (n: number) => void;
   setPreviewW: (n: number) => void;
   setInspectorW: (n: number) => void;
   setCutH: (n: number) => void;
+  setTimelineZoom: (n: number) => void;
 };
 
 const KEY = "aftercut-layout";
@@ -45,6 +47,7 @@ function clamp(n: number, min: number, max: number, fallback: number) {
 
 export const useStudioLayout = create<Layout>((set, get) => ({
   ...load(),
+  timelineZoom: 2,
   setTimelineH: (timelineH) => {
     const next = { ...get(), timelineH: clamp(timelineH, 148, 560, 268) };
     persist(next);
@@ -65,4 +68,5 @@ export const useStudioLayout = create<Layout>((set, get) => ({
     persist(next);
     set({ cutH: next.cutH });
   },
+  setTimelineZoom: (timelineZoom) => set({ timelineZoom: clamp(timelineZoom, 1, 6, 2) }),
 }));

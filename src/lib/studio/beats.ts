@@ -23,7 +23,12 @@ function median(values: number[]): number {
 
 export async function analyzeAudio(buffer: ArrayBuffer, fromUrl: string | null = null): Promise<AudioAnalysis> {
   const ctx = audioContext();
-  if (ctx.state === "suspended") await ctx.resume().catch(() => undefined);
+  if (ctx.state === "suspended") {
+    await Promise.race([
+      ctx.resume().catch(() => undefined),
+      new Promise<void>((resolve) => window.setTimeout(resolve, 400)),
+    ]);
+  }
   const audio = await ctx.decodeAudioData(buffer.slice(0));
   setDecodedAudio(audio, fromUrl);
   const data = audio.getChannelData(0);
@@ -141,24 +146,35 @@ export function makeCuts(
 ): number[] {
   const inRange = beats.filter((b) => b >= start + 0.04 && b < end - 0.12);
   const cuts = [start];
-  const offset = seed % 2;
+  const mix = (n: number) => {
+    let x = (seed + 1) >>> 0;
+    x ^= Math.imul(n + 1, 0x9e3779b9);
+    x = Math.imul(x ^ (x >>> 16), 0x85ebca6b);
+    x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35);
+    return (x ^ (x >>> 16)) >>> 0;
+  };
+  const everySteady = 2 + (mix(1) % 3);
+  const offset = mix(2) % everySteady;
+  const loudAt = 0.42 + (mix(3) % 28) / 100;
+  const downEvery = 2 + (mix(4) % 3);
 
   if (pacing === "steady") {
     inRange.forEach((b, i) => {
-      if ((i + offset) % 2 === 0) cuts.push(b);
+      if ((i + offset) % everySteady === 0) cuts.push(b);
     });
   } else if (pacing === "energy" && energy) {
+    const denseEvery = 1 + (mix(5) % 2);
+    const quietEvery = 2 + (mix(6) % 3);
     inRange.forEach((b, i) => {
       const e = energyAt(energy, b);
-      const dense = e > 0.55;
-      const every = dense ? 1 : 3;
-      if ((i + offset) % every === 0) cuts.push(b);
+      const every = e > loudAt ? denseEvery : quietEvery;
+      if ((i + (mix(7) % every)) % every === 0) cuts.push(b);
     });
   } else {
     inRange.forEach((b, i) => {
-      const isDown = (i + offset) % 4 === 0;
+      const isDown = (i + offset) % downEvery === 0;
       const e = energy ? energyAt(energy, b) : 0.4;
-      if (isDown || ((i + offset) % 2 === 0 && e > 0.62)) cuts.push(b);
+      if (isDown || ((i + mix(8)) % 2 === 0 && e > loudAt)) cuts.push(b);
     });
   }
 
@@ -166,6 +182,16 @@ export function makeCuts(
   const cleaned: number[] = [];
   for (const c of cuts) {
     if (!cleaned.length || c - cleaned[cleaned.length - 1] > 0.22) cleaned.push(c);
+  }
+  if (cleaned.length >= 3) {
+    const i = 1 + (mix(9) % (cleaned.length - 2));
+    const min = cleaned[i - 1]! + 0.24;
+    const max = cleaned[i + 1]! - 0.24;
+    if (max > min) cleaned[i] = min + ((mix(10) % 1000) / 1000) * (max - min);
+  } else if (cleaned.length === 2 && cleaned[1]! - cleaned[0]! > 0.9) {
+    const span = cleaned[1]! - cleaned[0]!;
+    const at = cleaned[0]! + span * (0.28 + (mix(11) % 50) / 100);
+    cleaned.splice(1, 0, Math.min(cleaned[1]! - 0.3, Math.max(cleaned[0]! + 0.3, at)));
   }
   return cleaned;
 }

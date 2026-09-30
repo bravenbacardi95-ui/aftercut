@@ -6,9 +6,32 @@ import { PhonePreview, Transport, useLivePreview } from "@/components/studio/stu
 import { SplitPane } from "@/components/studio/split-pane";
 import { useStudioLayout } from "@/lib/studio/layout";
 import { PACKS, resolveCutClips } from "@/lib/studio/packs";
+import { captureVideoPoster } from "@/lib/studio/media";
 import { useStudio } from "@/lib/studio/store";
 import type { MediaClip } from "@/lib/studio/types";
 import { cn } from "@/lib/utils";
+
+function ingestUploads(files: File[]) {
+  const { addUserClip, setUserClipPoster } = useStudio.getState();
+  files.forEach((file) => {
+    const src = URL.createObjectURL(file);
+    const id = `up-${file.name}-${file.size}-${file.lastModified}`;
+    const video = file.type.startsWith("video");
+    addUserClip({
+      id,
+      kind: video ? "video" : "image",
+      src,
+      poster: video ? undefined : src,
+      name: file.name.replace(/\.[^.]+$/, ""),
+      origin: "upload",
+    });
+    if (video) {
+      void captureVideoPoster(src).then((poster) => {
+        if (poster) setUserClipPoster(id, poster);
+      });
+    }
+  });
+}
 
 export function ClipShelf() {
   const packId = useStudio((s) => s.packId);
@@ -18,23 +41,12 @@ export function ClipShelf() {
   const selectedClipIds = useStudio((s) => s.selectedClipIds);
   const userClips = useStudio((s) => s.userClips);
   const toggleCutClip = useStudio((s) => s.toggleCutClip);
-  const addUserClip = useStudio((s) => s.addUserClip);
   const removeUserClip = useStudio((s) => s.removeUserClip);
   const inputRef = useRef<HTMLInputElement>(null);
   const category = PACKS.find((p) => p.id === packId) ?? PACKS[0];
 
   const onFiles = (files: File[]) => {
-    files.forEach((file) => {
-      const src = URL.createObjectURL(file);
-      addUserClip({
-        id: `up-${file.name}-${file.size}-${file.lastModified}`,
-        kind: file.type.startsWith("video") ? "video" : "image",
-        src,
-        poster: file.type.startsWith("video") ? undefined : src,
-        name: file.name.replace(/\.[^.]+$/, ""),
-        origin: "upload",
-      });
-    });
+    ingestUploads(files);
   };
 
   const clips = footageTab === "upload" ? userClips : category.clips;
@@ -116,7 +128,6 @@ export function FootageWindow() {
   const vaultError = useStudio((s) => s.vaultError);
   const searchVault = useStudio((s) => s.searchVault);
   const toggleCutClip = useStudio((s) => s.toggleCutClip);
-  const addUserClip = useStudio((s) => s.addUserClip);
   const removeUserClip = useStudio((s) => s.removeUserClip);
   const removeFromCut = useStudio((s) => s.removeFromCut);
   const clearStock = useStudio((s) => s.clearStock);
@@ -141,17 +152,7 @@ export function FootageWindow() {
   const searchHits = searchKey ? vaultClips.filter((c) => c.categoryId === `search:${searchKey}`) : [];
 
   const onFiles = (files: File[]) => {
-    files.forEach((file) => {
-      const src = URL.createObjectURL(file);
-      addUserClip({
-        id: `up-${file.name}-${file.size}-${file.lastModified}`,
-        kind: file.type.startsWith("video") ? "video" : "image",
-        src,
-        poster: file.type.startsWith("video") ? undefined : src,
-        name: file.name.replace(/\.[^.]+$/, ""),
-        origin: "upload",
-      });
-    });
+    ingestUploads(files);
   };
 
   const runSearch = () => {
@@ -167,7 +168,7 @@ export function FootageWindow() {
             className="inline-flex items-center gap-1 text-sm text-muted hover:text-fg"
             onClick={() => {
               setStep("setup");
-              void navigate({ to: "/studio/batch" });
+              void navigate({ href: "/studio/setup" });
             }}
           >
             <ChevronLeft className="size-4" />
@@ -273,11 +274,11 @@ export function FootageWindow() {
                 if (mode === "single") {
                   makeSingle();
                   setStep("edit");
-                  void navigate({ to: "/studio/editor" });
+                  void navigate({ href: "/studio/editor" });
                   return;
                 }
                 setStep("vary");
-                void navigate({ to: "/studio/vary" });
+                void navigate({ href: "/studio/vary" });
               }}
             />
           </SplitPane>
@@ -336,11 +337,11 @@ export function FootageWindow() {
                 if (mode === "single") {
                   makeSingle();
                   setStep("edit");
-                  void navigate({ to: "/studio/editor" });
+                  void navigate({ href: "/studio/editor" });
                   return;
                 }
                 setStep("vary");
-                void navigate({ to: "/studio/vary" });
+                void navigate({ href: "/studio/vary" });
               }}
             />
           </SplitPane>

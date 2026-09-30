@@ -3,10 +3,16 @@ import type { LyricWord, Region } from "./types";
 
 let active: AudioContext | null = null;
 
-export async function playWordsWithClicks(words: LyricWord[], region: Region) {
+export function stopClicks() {
+  const ctx = active;
+  active = null;
+  ctx?.close().catch(() => undefined);
+}
+
+export function playWordsWithClicks(words: LyricWord[], region: Region) {
   const audio = getDecodedAudio();
-  if (!audio || !words.length) return;
-  active?.close().catch(() => undefined);
+  if (!audio || !words.length) return Promise.resolve();
+  stopClicks();
   const ctx = new AudioContext();
   active = ctx;
   const rate = audio.sampleRate;
@@ -25,6 +31,13 @@ export async function playWordsWithClicks(words: LyricWord[], region: Region) {
   source.connect(ctx.destination);
   const when = ctx.currentTime + 0.06;
   source.start(when);
+  const done = new Promise<void>((resolve) => {
+    source.onended = () => {
+      if (active === ctx) active = null;
+      ctx.close().catch(() => undefined);
+      resolve();
+    };
+  });
   for (const word of words) {
     if (word.start < region.start - 0.05 || word.start > region.end + 0.05) continue;
     const osc = ctx.createOscillator();
@@ -40,8 +53,5 @@ export async function playWordsWithClicks(words: LyricWord[], region: Region) {
     osc.start(at);
     osc.stop(at + 0.03);
   }
-  source.onended = () => {
-    if (active === ctx) active = null;
-    ctx.close().catch(() => undefined);
-  };
+  return done;
 }

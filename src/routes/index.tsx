@@ -1,41 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AudioLines, Captions, Download, Grid2x2, Scissors, SlidersHorizontal } from "lucide-react";
 import { DropTrack } from "@/components/drop-track";
-import { PhoneFrame, PlatformChrome } from "@/components/phone-frame";
+import { LandingReel } from "@/components/landing-reel";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 
 export const Route = createFileRoute("/")({ component: Home });
-
-const demos = [
-  {
-    src: "/packs/motion/tunnel.mp4",
-    poster: "/packs/motion/tunnel.jpg",
-    caption: "chasing the feeling",
-    variant: "tiktok" as const,
-    look: "",
-  },
-  {
-    src: "/packs/motion/ocean.mp4",
-    poster: "/packs/motion/ocean.jpg",
-    caption: "all night",
-    variant: "reels" as const,
-    look: "",
-  },
-  {
-    src: "/packs/motion/club.mp4",
-    poster: "/packs/motion/club.jpg",
-    caption: "keep the lights low",
-    variant: "tiktok" as const,
-    look: "",
-  },
-  {
-    src: "/packs/motion/grass.mp4",
-    poster: "/packs/motion/grass.jpg",
-    caption: "let it ride",
-    variant: "reels" as const,
-    look: "",
-  },
-];
 
 function Home() {
   return (
@@ -49,36 +18,13 @@ function Home() {
               Consistent content for artists, without the cap.
             </h1>
             <p className="mx-auto mt-5 max-w-md text-base leading-relaxed text-muted lg:mx-0">
-              Drop a track. Aftercut hears the vocal and times every word. Make one video and control the clip order yourself, or build a wall of up to 48 versions. Unlimited exports.
+              Drop a track. Set the snippet, paste the lyrics or transcribe the vocal, then cut one video or a wall of up to 48. Unlimited exports.
             </p>
             <div className="mt-8 flex justify-center lg:justify-start">
               <DropTrack />
             </div>
           </div>
-          <div className="w-full max-w-full overflow-hidden">
-            <div className="no-scrollbar flex gap-4 overflow-x-auto pb-2">
-              {demos.map((d) => (
-                <div key={d.src} className="w-[14rem] shrink-0 sm:w-[16rem]">
-                  <PhoneFrame caption={d.caption}>
-                    <video
-                      src={d.src}
-                      poster={d.poster}
-                      muted
-                      loop
-                      playsInline
-                      autoPlay
-                      preload="metadata"
-                      className={`block h-full w-full object-cover ${d.look}`.trim()}
-                    />
-                    <PlatformChrome variant={d.variant} />
-                  </PhoneFrame>
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 px-4 text-xs uppercase tracking-[0.16em] text-subtle md:px-0">
-              Real exports, straight out of the studio
-            </p>
-          </div>
+          <LandingReel />
         </section>
 
         <section className="mx-auto max-w-6xl px-4 py-16 md:px-8 md:py-24">
@@ -89,17 +35,17 @@ function Home() {
               {
                 n: "1",
                 t: "Set it up once",
-                d: "Scrub the exact snippet. Vocals are transcribed and laid on the rhythm while you pick a pack of clips.",
+                d: "Scrub the exact snippet. Paste the lyrics or press Transcribe, then pick a pack of clips.",
               },
               {
                 n: "2",
                 t: "Choose what gets varied",
-                d: "Caption styles, looks, and framings. Every version lands its own cuts on the beat, so no two come out the same.",
+                d: "Fonts, caption styles, looks, and framing. Every version gets its own cuts and clip order, and the wall shows how many are actually unique.",
               },
               {
                 n: "3",
                 t: "Keep the ones that land",
-                d: "A wall of finished videos comes back — up to 48. Edit any word on the timeline, then export the keepers.",
+                d: "A wall of finished videos comes back — up to 48. Edit any word on the timeline, then export one video or the whole batch.",
               },
             ].map((s) => (
               <li key={s.n} className="rounded-xl bg-surface p-6 shadow-[0_0_0_1px_rgba(242,239,232,0.08)]">
@@ -120,15 +66,15 @@ function Home() {
               {
                 icon: Captions,
                 t: "Word-level lyric timing",
-                d: "The vocal is transcribed into the editor. Demo lyrics are never kept. Every word is a bubble you can rewrite or stretch to the millisecond.",
+                d: "Paste the words, or transcribe the vocal. If cloud speech-to-text is down, the isolated stem is heard in the browser. Nothing is filled with sample lyrics.",
               },
               { icon: Grid2x2, t: "48 at a time", d: "Other studios stop at 10. Aftercut builds a full wall so you can actually choose." },
-              { icon: Download, t: "Unlimited exports", d: "No 60-a-month ceiling. Download every keeper, every batch, no account." },
+              { icon: Download, t: "Unlimited exports", d: "No monthly ceiling. Export one video, or the whole wall as a zip, with no account." },
               { icon: AudioLines, t: "Packs included", d: "Night drive, tape room, after hours, grain — or drop in your own clips." },
               {
                 icon: SlidersHorizontal,
-                t: "Brat, plus the rest of the type",
-                d: "Brat, Clean, Editorial, and Poster on every version — plus karaoke, stacked, and the lime full-bleed look.",
+                t: "Type, line, and karaoke",
+                d: "Brat, Clean, Editorial, and Poster. One word, whole line, karaoke, or typewriter. Looks are Clean, Film, Crush, Cool, and Fade.",
               },
             ].map((f) => (
               <div key={f.t} className="rounded-xl bg-surface p-5 shadow-[0_0_0_1px_rgba(242,239,232,0.08)]">

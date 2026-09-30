@@ -12,6 +12,7 @@ export async function exportRecipe(opts: {
   end: number;
   captionPrefs?: CaptionPrefs;
   onProgress?: (p: number) => void;
+  signal?: AbortSignal;
 }): Promise<Blob> {
   const width = 720;
   const height = 1280;
@@ -25,11 +26,14 @@ export async function exportRecipe(opts: {
   ctx.imageSmoothingQuality = "high";
   ensureCaptionFonts();
   const captionPrefs = opts.captionPrefs ?? DEFAULT_CAPTION_PREFS;
-  await waitForClips(opts.clips);
+  throwIfAborted(opts.signal);
+  await waitForClips(opts.clips, opts.signal);
+  throwIfAborted(opts.signal);
   setPackVideoPlaying(false);
 
   const audioCtx = new AudioContext();
-  const decoded = await decodeTrack(audioCtx, opts.audioUrl);
+  const decoded = await decodeTrack(audioCtx, opts.audioUrl, opts.signal);
+  throwIfAborted(opts.signal);
   const slice = sliceBuffer(audioCtx, decoded, opts.start, opts.end);
   const dest = audioCtx.createMediaStreamDestination();
   const bufferSource = audioCtx.createBufferSource();
@@ -54,7 +58,12 @@ export async function exportRecipe(opts: {
   };
 
   try {
-    await audioCtx.resume();
+    await Promise.race([
+      audioCtx.resume().catch(() => undefined),
+      whenAborted(opts.signal),
+      new Promise<void>((resolve) => window.setTimeout(resolve, 400)),
+    ]);
+    throwIfAborted(opts.signal);
     await new Promise<void>((resolve, reject) => {
       recorder.onstop = () => resolve();
       recorder.onerror = () => reject(new Error("Export failed"));
@@ -65,6 +74,7 @@ export async function exportRecipe(opts: {
       void (async () => {
         try {
           for (let i = 0; i < frames; i++) {
+            if (opts.signal?.aborted) throw new DOMException("Export cancelled", "AbortError");
             const t = opts.start + i / fps;
             const clip = clipForRecipe(opts.recipe, opts.clips, t);
             const src = clip?.kind === "video" ? clip.src : null;
@@ -102,6 +112,15 @@ export async function exportRecipe(opts: {
           await sleep(120);
           if (recorder.state !== "inactive") recorder.stop();
         } catch (err) {
+          try {
+            bufferSource.stop();
+          } catch {
+            /* already stopped */
+          }
+          if (recorder.state === "recording") {
+            recorder.onstop = null;
+            recorder.stop();
+          }
           reject(err instanceof Error ? err : new Error("Export failed"));
         }
       })();
@@ -120,11 +139,27 @@ function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-async function decodeTrack(ctx: AudioContext, url: string) {
-  const res = await fetch(url);
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw new DOMException("Export cancelled", "AbortError");
+}
+
+function whenAborted(signal: AbortSignal | undefined): Promise<never> {
+  return new Promise((_, reject) => {
+    if (!signal) return;
+    const fail = () => reject(new DOMException("Export cancelled", "AbortError"));
+    if (signal.aborted) fail();
+    else signal.addEventListener("abort", fail, { once: true });
+  });
+}
+
+async function decodeTrack(ctx: AudioContext, url: string, signal?: AbortSignal) {
+  throwIfAborted(signal);
+  const res = await Promise.race([fetch(url), whenAborted(signal)]);
   if (!res.ok) throw new Error("Could not load audio for export");
+  throwIfAborted(signal);
   const raw = await res.arrayBuffer();
-  return ctx.decodeAudioData(raw.slice(0));
+  throwIfAborted(signal);
+  return await Promise.race([ctx.decodeAudioData(raw.slice(0)), whenAborted(signal)]);
 }
 
 function sliceBuffer(ctx: AudioContext, source: AudioBuffer, start: number, end: number) {
@@ -138,12 +173,18 @@ function sliceBuffer(ctx: AudioContext, source: AudioBuffer, start: number, end:
   return slice;
 }
 
-function waitForClips(clips: MediaClip[]) {
+function waitForClips(clips: MediaClip[], signal?: AbortSignal) {
   return Promise.all(
     clips.map(
       (clip) =>
-        new Promise<void>((resolve) => {
+        new Promise<void>((resolve, reject) => {
           const done = () => resolve();
+          const fail = () => reject(new DOMException("Export cancelled", "AbortError"));
+          if (signal?.aborted) {
+            fail();
+            return;
+          }
+          signal?.addEventListener("abort", fail, { once: true });
           if (clip.kind === "video") {
             const video = getVideo(clip.src);
             if (video.readyState >= 2) {

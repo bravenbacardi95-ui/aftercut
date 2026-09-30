@@ -1,4 +1,4 @@
-import { blobToBase64, encodeClipWav, encodeLyricWav, ensureDecoded, type ClipPcm } from "./audio-clip";
+import { blobToBase64, encodeClipWav, encodeLyricWav, ensureDecoded, pcmFromBlob, type ClipPcm } from "./audio-clip";
 import { alignWordsToBeats, groupByAuthoredLine, groupWordsIntoLines, parseLyricText, tokenizeLine, wordsFromStt } from "./lyrics";
 import { applyColloquialFixes } from "./lyric-sense";
 import { transcribeTrack } from "./transcribe.fn";
@@ -16,8 +16,6 @@ export async function transcribeRegion(
   opts: {
     audioUrl?: string | null;
     trackName?: string;
-    fallbackText?: string;
-    allowDemoFallback?: boolean;
     isolate?: boolean;
     onStatus?: TranscribeProgress;
   } = {},
@@ -35,11 +33,6 @@ export async function transcribeRegion(
     await yieldToPaint();
   }
 
-  if (opts.allowDemoFallback && opts.fallbackText?.trim()) {
-    opts.onStatus?.("Timing each word…");
-    return demoFallback(opts.fallbackText, analysis, region);
-  }
-
   if (opts.isolate !== false) {
     const stem = await prepareVocalStem({
       audioUrl: opts.audioUrl ?? null,
@@ -51,16 +44,35 @@ export async function transcribeRegion(
     if (!stem.isolated) {
       return empty(stem.error ?? "Vocal isolation failed. The full mix was not used.");
     }
-    const heard = await listenCloud(stem.blob, opts.onStatus);
+    const heard = await listenCloud(stem.blob, opts.onStatus).catch((err: unknown) => {
+      console.warn("cloud transcribe failed", err);
+      return {
+        ok: false as const,
+        error: err instanceof Error ? err.message : "Cloud transcription failed.",
+        unavailable: true,
+      };
+    });
     if (heard.ok && (heard.words.length || heard.text.trim())) {
       opts.onStatus?.("Placing each word on the vocal…");
       const placed = await fromStt(heard.text, heard.words, stem.offset, analysis, region);
       return { ...placed, warning: joinWarning(stem.error, placed.warning) };
     }
-    if (stem.error) {
-      return empty(stem.error);
+    const cloudDown = !heard.ok && (heard.unavailable || /unavailable|failed|network|fetch/i.test(heard.error));
+    if (cloudDown || !heard.ok) {
+      opts.onStatus?.("Cloud transcription missed. Hearing the isolated vocal in the browser…");
+      const pcm = await pcmFromBlob(stem.blob, stem.offset);
+      const local = pcm ? await listenLocalFallback(pcm, opts.onStatus) : null;
+      if (local && (local.words.length || local.text.trim())) {
+        opts.onStatus?.("Placing each word on the vocal…");
+        const placed = await fromStt(local.text, local.words, stem.offset, analysis, region);
+        return {
+          ...placed,
+          warning: joinWarning(stem.error, heard.ok ? null : heard.error && !heard.unavailable ? heard.error : null),
+        };
+      }
     }
-    return empty(heard.ok ? "No vocals detected in the isolated stem." : heard.error);
+    if (!heard.ok) return empty(heard.error || "Couldn’t transcribe the isolated vocal.");
+    return empty(stem.error ?? "No vocals detected in the isolated stem.");
   }
 
   opts.onStatus?.("Cleaning the vocal…");
@@ -95,10 +107,6 @@ export async function transcribeRegion(
   if (local && (local.words.length || local.text.trim())) {
     opts.onStatus?.("Placing each word on the vocal…");
     return fromStt(local.text, local.words, whisperClip?.offset ?? region.start, analysis, region);
-  }
-
-  if (opts.allowDemoFallback && opts.fallbackText?.trim()) {
-    return demoFallback(opts.fallbackText, analysis, region);
   }
 
   const failed = heard.find((item) => item && !item.result.ok && !item.result.unavailable);
@@ -198,14 +206,6 @@ async function listenLocalFallback(pcm: ClipPcm, onStatus?: TranscribeProgress) 
     console.warn("whisper transcribe failed", err);
     return null;
   }
-}
-
-function demoFallback(text: string, analysis: AudioAnalysis, region: Region) {
-  return {
-    words: lockWordsToSinging(alignFallback(text, analysis, region), region),
-    source: "aligned" as const,
-    warning: "Demo vocals were timed to the rhythm so you can still edit the bubbles.",
-  };
 }
 
 async function fromStt(

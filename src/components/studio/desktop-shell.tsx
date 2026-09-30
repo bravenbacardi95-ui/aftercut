@@ -6,12 +6,12 @@ import { useStudio } from "@/lib/studio/store";
 import { cn } from "@/lib/utils";
 
 const SINGLE = [
-  { to: "/studio/batch", id: "batch", label: "Setup" },
+  { to: "/studio/setup", id: "batch", label: "Setup" },
   { to: "/studio/editor", id: "editor", label: "Video" },
 ] as const;
 
 const BATCH = [
-  { to: "/studio/batch", id: "batch", label: "Setup" },
+  { to: "/studio/setup", id: "batch", label: "Setup" },
   { to: "/studio/footage", id: "footage", label: "Clips" },
   { to: "/studio/vary", id: "vary", label: "Variations" },
   { to: "/studio/wall", id: "wall", label: "Wall" },
@@ -53,41 +53,49 @@ export function DesktopShell({ children }: { children: ReactNode }) {
       </header>
       {audioUrl ? (
         <nav className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1.5" aria-label="Windows">
-          <div className="mr-2 flex rounded-md bg-elevated p-0.5">
+          <div className="mr-2 flex rounded-md bg-elevated p-0.5" role="group" aria-label="Edit mode">
             <button
               type="button"
-              className={cn("rounded px-2.5 py-1 text-sm", mode === "single" ? "bg-bg text-fg" : "text-muted")}
+              aria-pressed={mode === "single"}
+              className={cn("rounded px-2.5 py-1 text-sm", mode === "single" ? "bg-accent text-accent-fg" : "text-muted hover:text-fg")}
               onClick={() => {
                 setMode("single");
-                if (pathname.startsWith("/studio/vary") || pathname.startsWith("/studio/wall")) {
-                  void navigate({ to: "/studio/editor" });
-                }
+                const state = useStudio.getState();
+                if (state.analysis && state.clips().length && !state.recipes.some((recipe) => recipe.id === "single")) state.makeSingle();
+                void navigate({ href: "/studio/editor" });
               }}
             >
               One video
             </button>
             <button
               type="button"
-              className={cn("rounded px-2.5 py-1 text-sm", mode === "batch" ? "bg-bg text-fg" : "text-muted")}
+              aria-pressed={mode === "batch"}
+              className={cn("rounded px-2.5 py-1 text-sm", mode === "batch" ? "bg-accent text-accent-fg" : "text-muted hover:text-fg")}
               onClick={() => {
                 setMode("batch");
-                if (pathname.startsWith("/studio/editor")) void navigate({ to: "/studio/vary" });
+                void navigate({ href: "/studio/vary" });
               }}
             >
               Batch
             </button>
           </div>
           {windows.map((w) => (
-            <Link
+            <a
               key={w.id}
-              to={w.to}
+              href={w.to}
+              aria-current={current?.id === w.id ? "page" : undefined}
               className={cn(
                 "rounded-md px-3 py-1.5 text-sm transition-[background-color,color] duration-150",
                 current?.id === w.id ? "bg-elevated text-fg" : "text-muted hover:text-fg",
               )}
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                e.preventDefault();
+                void navigate({ href: w.to });
+              }}
             >
               {w.label}
-            </Link>
+            </a>
           ))}
         </nav>
       ) : null}
@@ -127,7 +135,7 @@ function FileMenu() {
         <MenuItem
           onClick={() => {
             reset();
-            void navigate({ to: "/studio" });
+            void navigate({ href: "/studio" });
           }}
         >
           New track
@@ -147,7 +155,7 @@ function FileMenu() {
         onChange={(e) => {
           const file = e.target.files?.[0];
           e.currentTarget.value = "";
-          if (file) void loadFile(file).then(() => navigate({ to: "/studio/batch" }));
+          if (file) void loadFile(file).then(() => navigate({ href: "/studio/setup" }));
         }}
       />
     </>
@@ -197,7 +205,7 @@ function ViewMenu() {
   return (
     <Menu label="View">
       {windows.map((w) => (
-        <MenuItem key={w.id} onClick={() => void navigate({ to: w.to })}>
+        <MenuItem key={w.id} onClick={() => void navigate({ href: w.to })}>
           {w.label}
         </MenuItem>
       ))}

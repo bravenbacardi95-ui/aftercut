@@ -1,13 +1,15 @@
-import { memo, useEffect, useRef, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Pause, Play, SkipBack } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PlayerCanvas } from "@/components/studio/player-canvas";
 import { formatTime } from "@/lib/studio/beats";
+import { drawFrame, ensureCaptionFonts } from "@/lib/studio/compositor";
+import { getImage } from "@/lib/studio/media";
 import { PACKS, resolveCutClips } from "@/lib/studio/packs";
 import { buildRecipes, buildSingleRecipe } from "@/lib/studio/recipes";
 import { useStudio } from "@/lib/studio/store";
 import { cn } from "@/lib/utils";
-import type { Recipe } from "@/lib/studio/types";
+import type { LyricLine, Recipe } from "@/lib/studio/types";
 import { usePlayback } from "./playback";
 import { armLoop } from "@/lib/studio/yield";
 
@@ -139,20 +141,24 @@ export function usePreviewRecipe(): Recipe | null {
 
 export function useLivePreview(): Recipe | null {
   const base = usePreviewRecipe();
+  const recipes = useStudio((s) => s.recipes);
   const font = useStudio((s) => s.fonts[0]);
   const captionStyle = useStudio((s) => s.captionStyles[0]);
   const effect = useStudio((s) => s.captionEffects[0]);
   const look = useStudio((s) => s.looks[0]);
   const framing = useStudio((s) => s.framings[0]);
-  if (!base) return null;
-  return {
-    ...base,
-    font: font ?? base.font,
-    captionStyle: captionStyle ?? base.captionStyle,
-    effect: effect ?? base.effect,
-    look: look ?? base.look,
-    framing: framing ?? base.framing,
-  };
+  return useMemo(() => {
+    if (!base) return null;
+    if (recipes.some((recipe) => recipe.id === base.id)) return base;
+    return {
+      ...base,
+      font: font ?? base.font,
+      captionStyle: captionStyle ?? base.captionStyle,
+      effect: effect ?? base.effect,
+      look: look ?? base.look,
+      framing: framing ?? base.framing,
+    };
+  }, [base, recipes, font, captionStyle, effect, look, framing]);
 }
 
 export function Transport({ compact = false }: { compact?: boolean }) {
@@ -192,40 +198,78 @@ export function Transport({ compact = false }: { compact?: boolean }) {
 }
 
 export const RecipeThumb = memo(function RecipeThumb({ recipe }: { recipe: Recipe }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const selectedClipIds = useStudio((s) => s.selectedClipIds);
   const userClips = useStudio((s) => s.userClips);
   const vaultClips = useStudio((s) => s.vaultClips);
   const lyrics = useStudio((s) => s.lyrics);
-  const clips = resolveCutClips(selectedClipIds, [...userClips, ...vaultClips]);
-  const poster = clips[recipe.index % Math.max(1, clips.length)]?.poster ?? clips[0]?.src ?? PACKS[0].poster;
-  const line = lyrics[recipe.index % Math.max(1, lyrics.length)]?.text ?? "";
-  const brat = recipe.font === "brat";
-  const filter =
-    recipe.look === "film"
-      ? "sepia(0.25) contrast(1.08)"
-      : recipe.look === "crush"
-        ? "contrast(1.3) saturate(0.75)"
-        : recipe.look === "cool"
-          ? "saturate(0.7) hue-rotate(12deg)"
-          : recipe.look === "fade"
-            ? "contrast(0.88) brightness(1.08)"
-            : "none";
-  const fontClass =
-    recipe.font === "brat"
-      ? "font-brat lowercase"
-      : recipe.font === "editorial"
-        ? "font-serif italic"
-        : recipe.font === "poster"
-          ? "font-poster uppercase"
-          : "font-sans";
+  const captionPrefs = useStudio((s) => s.captionPrefs);
+  const clipKey = recipe.clipIds.join("|");
+  const lyricKey = lyrics.map((line) => `${line.id}:${line.text}`).join("|");
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ensureCaptionFonts();
+    const extras = [...userClips, ...vaultClips];
+    const ids = [...new Set([...(recipe.clipIds ?? []), ...selectedClipIds])];
+    const clips = resolveCutClips(ids.length ? ids : selectedClipIds, extras);
+    const width = 180;
+    const height = 320;
+    canvas.width = width;
+    canvas.height = height;
+    let dead = false;
+    const paint = () => {
+      if (dead) return;
+      drawFrame(ctx, {
+        recipe,
+        clips,
+        lyrics,
+        time: firstCaptionTime(recipe, lyrics),
+        width,
+        height,
+        captionPrefs,
+        quality: "preview",
+      });
+    };
+    paint();
+    const unsubs: Array<() => void> = [];
+    for (const clip of clips) {
+      const src = clip.poster || (clip.kind === "image" ? clip.src : "");
+      if (!src) continue;
+      const img = getImage(src);
+      if (!img.complete) {
+        const onLoad = () => paint();
+        img.addEventListener("load", onLoad);
+        unsubs.push(() => img.removeEventListener("load", onLoad));
+      }
+    }
+    const retry = window.setTimeout(paint, 500);
+    return () => {
+      dead = true;
+      window.clearTimeout(retry);
+      unsubs.forEach((fn) => fn());
+    };
+  }, [recipe, clipKey, lyricKey, lyrics, captionPrefs, selectedClipIds, userClips, vaultClips]);
+
   return (
-    <span className="relative block aspect-[9/16] w-full bg-bg">
-      <img src={poster} alt="" className="h-full w-full object-cover" style={{ filter }} />
-      <span
-        className={`absolute inset-x-1 bottom-2 text-center text-[0.55rem] font-bold leading-tight drop-shadow ${fontClass} ${brat ? "text-[#8ACE00]" : "text-fg"}`}
-      >
-        {line}
-      </span>
-    </span>
+    <canvas
+      ref={canvasRef}
+      aria-label={`${recipe.font} ${recipe.captionStyle} ${recipe.look}`}
+      className="block aspect-[9/16] w-full bg-bg"
+    />
   );
 });
+
+function firstCaptionTime(recipe: Recipe, lyrics: LyricLine[]) {
+  const start = recipe.cuts[0] ?? 0;
+  const end = recipe.cuts[recipe.cuts.length - 1] ?? start + 1;
+  for (const line of lyrics) {
+    for (const word of line.words) {
+      if (word.end > start && word.start < end) return Math.max(start, word.start) + Math.min(0.08, Math.max(0.02, (word.end - word.start) * 0.35));
+    }
+  }
+  return start + 0.12;
+}

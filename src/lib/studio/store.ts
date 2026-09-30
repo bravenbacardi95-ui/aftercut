@@ -15,7 +15,7 @@ import {
   wordsToDraft,
   nextWordId,
 } from "./lyrics";
-import { buildRecipes, buildSingleRecipe, moveCutTime, moveSegmentTo, removeCutAt, splitCuts } from "./recipes";
+import { buildRecipes, buildSingleRecipe, moveCutTime, moveSegmentTo, removeCutAt, retargetRecipe, splitCuts } from "./recipes";
 import { findSavedLyrics, loadLyricBank, lyricKey, persistLyricBank, type LyricVersion } from "./lyric-bank";
 import { commitWords, transcribeRegion } from "./transcribe";
 import { alignLyrics } from "./align.fn";
@@ -25,6 +25,7 @@ import { setDecodedAudio, blobToBase64 } from "./audio-clip";
 import { clearVocalStemCache } from "./vocal-stem";
 import { beginGesture, clearHistory, endGesture, historyFlags, onHistory, popRedo, popUndo, remember, sliceOf } from "./history";
 import { searchVaultCatalog } from "./vault-catalog";
+import { searchStockVault } from "./stock-search.fn";
 import { DEFAULT_CAPTION_PREFS, MAX_REGION, MIN_REGION } from "./types";
 import type {
   AudioAnalysis,
@@ -118,6 +119,7 @@ type StudioState = {
   setFootageTab: (tab: "stock" | "upload") => void;
   toggleCutClip: (id: string) => void;
   addUserClip: (clip: MediaClip) => void;
+  setUserClipPoster: (id: string, poster: string) => void;
   searchVault: (query: string) => Promise<void>;
   removeUserClip: (id: string) => void;
   removeFromCut: (id: string) => void;
@@ -234,19 +236,6 @@ function focusChoice<T>(cur: T[], id: T): T[] {
   return [id, ...cur.filter((item) => item !== id)];
 }
 
-function restyleOpen(
-  get: () => { recipes: Recipe[]; selectedId: string | null },
-  patch: Partial<Recipe>,
-) {
-  const { recipes, selectedId } = get();
-  const id = selectedId ?? recipes[0]?.id;
-  if (!id) return {};
-  return {
-    selectedId: id,
-    recipes: recipes.map((recipe) => (recipe.id === id ? { ...recipe, ...patch } : recipe)),
-  };
-}
-
 function fallbackClipIds(recipe: Recipe, clips: MediaClip[]): string[] {
   const ids = clips.map((c) => c.id);
   const segments = Math.max(1, (recipe.cuts?.length ?? 2) - 1);
@@ -292,6 +281,22 @@ function touchSavedLyrics(get: () => StudioState, set: (partial: Partial<StudioS
   );
   persistLyricBank(next);
   set({ lyricBank: next });
+}
+
+let touchTimer: ReturnType<typeof setTimeout> | null = null;
+function queueTouch(get: () => StudioState, set: (partial: Partial<StudioState>) => void) {
+  if (touchTimer) clearTimeout(touchTimer);
+  touchTimer = setTimeout(() => {
+    touchTimer = null;
+    touchSavedLyrics(get, set);
+  }, 180);
+}
+function flushTouch(get: () => StudioState, set: (partial: Partial<StudioState>) => void) {
+  if (touchTimer) {
+    clearTimeout(touchTimer);
+    touchTimer = null;
+  }
+  touchSavedLyrics(get, set);
 }
 
 function isDemoLyricDump(version: { lyricDraft?: string; words: { text: string }[] }) {
@@ -435,8 +440,10 @@ export const useStudio = create<StudioState>((set, get) => ({
     const moved = !regionClose(last, region);
     if (!opts?.preview) remember("region", sliceOf(get()));
     const movedNotice = moved && last && get().words.length;
+    const recipes = analysis ? get().recipes.map((recipe) => retargetRecipe(recipe, region, analysis)) : get().recipes;
     set({
       region,
+      recipes,
       notice: movedNotice
         ? "Snippet moved. Your edits stayed put — press Re-sync to new window if this section should be timed again."
         : get().notice,
@@ -620,10 +627,12 @@ export const useStudio = create<StudioState>((set, get) => ({
   resizeWordEdge: (id, edge, time) => {
     const t = get().snapEnabled ? snapTime(time, snapPoints(get().analysis)) : time;
     set({ ...commitWords(resizeWord(get().words, id, edge, t, true)), lyricsDirty: true, selectedWordId: id });
+    queueTouch(get, set);
   },
   moveWordTo: (id, t) => {
     const time = get().snapEnabled ? snapTime(t, snapPoints(get().analysis)) : t;
     set({ ...commitWords(moveWord(get().words, id, time, false)), lyricsDirty: true, selectedWordId: id });
+    queueTouch(get, set);
   },
   deleteWord: (id) => {
     const next = removeWord(get().words, id);
@@ -673,19 +682,49 @@ export const useStudio = create<StudioState>((set, get) => ({
     });
     syncSingleCut(get, set);
   },
+  setUserClipPoster: (id, poster) => {
+    set({
+      userClips: get().userClips.map((clip) => (clip.id === id ? { ...clip, poster } : clip)),
+    });
+  },
   searchVault: async (query) => {
     const q = query.trim();
     if (q.length < 2) {
       set({ vaultQuery: q, vaultClips: [], vaultBusy: false, vaultError: null });
       return;
     }
-    const hits = searchVaultCatalog(q).map((clip) => ({ ...clip, categoryId: `search:${q.toLowerCase()}` }));
-    set({
-      vaultQuery: q,
-      vaultClips: hits,
-      vaultBusy: false,
-      vaultError: hits.length ? null : "Nothing in the stock vault matched that.",
-    });
+    set({ vaultQuery: q, vaultBusy: true, vaultError: null });
+    const local = () =>
+      searchVaultCatalog(q).map((clip) => ({ ...clip, categoryId: `search:${q.toLowerCase()}` }));
+    try {
+      const result = await searchStockVault({ data: { query: q } });
+      if (!result.ok) {
+        const hits = local();
+        set({
+          vaultBusy: false,
+          vaultClips: hits,
+          vaultError: hits.length ? `${result.error} Showing stock that matched instead.` : result.error,
+        });
+        return;
+      }
+      const shots: MediaClip[] = result.shots.map((shot) => ({
+        id: shot.id,
+        kind: "image",
+        src: shot.src,
+        poster: shot.src,
+        name: shot.name,
+        origin: "stock",
+        categoryId: `search:${q.toLowerCase()}`,
+      }));
+      set({ vaultQuery: q, vaultClips: shots, vaultBusy: false, vaultError: null });
+    } catch (err) {
+      const hits = local();
+      set({
+        vaultBusy: false,
+        vaultClips: hits,
+        vaultError: err instanceof Error ? err.message : "Vault search failed.",
+      });
+    }
   },
   removeUserClip: (id) => {
     const clip = get().userClips.find((item) => item.id === id);
@@ -721,26 +760,27 @@ export const useStudio = create<StudioState>((set, get) => ({
   toggleStyle: (id) => {
     const next = focusChoice(get().captionStyles, id);
     remember(`style:${id}`, sliceOf(get()));
-    set({ captionStyles: next, ...restyleOpen(get, { captionStyle: next[0]! }) });
+    set({ captionStyles: next.length ? next : get().captionStyles });
   },
   toggleEffect: (id) => {
     const next = focusChoice(get().captionEffects, id);
     remember(`effect:${id}`, sliceOf(get()));
-    set({ captionEffects: next, ...restyleOpen(get, { effect: next[0]! }) });
+    set({ captionEffects: next.length ? next : get().captionEffects });
   },
   toggleFont: (id) => {
+    const next = focusChoice(get().fonts, id);
     remember(`font:${id}`, sliceOf(get()));
-    set({ fonts: [id], ...restyleOpen(get, { font: id }) });
+    set({ fonts: next.length ? next : get().fonts });
   },
   toggleLook: (id) => {
     const next = focusChoice(get().looks, id);
     remember(`look:${id}`, sliceOf(get()));
-    set({ looks: next, ...restyleOpen(get, { look: next[0]! }) });
+    set({ looks: next.length ? next : get().looks });
   },
   toggleFraming: (id) => {
     const next = focusChoice(get().framings, id);
     remember(`frame:${id}`, sliceOf(get()));
-    set({ framings: next, ...restyleOpen(get, { framing: next[0]! }) });
+    set({ framings: next.length ? next : get().framings });
   },
   setPacing: (pacing) => {
     remember("pacing", sliceOf(get()));
@@ -933,7 +973,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   beginEdit: (key) => beginGesture(key, sliceOf(get())),
   endEdit: () => {
     endGesture();
-    touchSavedLyrics(get, set);
+    flushTouch(get, set);
   },
 }));
 
@@ -954,8 +994,6 @@ async function runTranscribe(gen: number) {
     const result = await transcribeRegion(state.region, state.analysis, {
       audioUrl: state.audioUrl,
       trackName: state.trackName,
-      fallbackText: DEMO_LYRICS,
-      allowDemoFallback: state.isDemo && !state.activeLyricId,
       isolate: state.isolateVocals,
       onStatus: (msg) => {
         const latest = useStudio.getState();

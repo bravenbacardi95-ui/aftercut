@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LoaderCircle, Mic, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMs } from "@/lib/studio/beats";
 import { lyricKey } from "@/lib/studio/lyric-bank";
 import { useStudio } from "@/lib/studio/store";
+import { warmTranscriber } from "@/lib/studio/whisper";
 import { cn } from "@/lib/utils";
 import { usePlayback } from "./playback";
 
@@ -39,8 +40,13 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
   const lastRegion = useStudio((s) => s.lastTranscribedRegion);
   const activeLyricId = useStudio((s) => s.activeLyricId);
   const songKey = lyricKey(trackName, analysis?.duration ?? 0);
-  const [mode, setMode] = useState<"words" | "text">("words");
+  const [mode, setMode] = useState<"words" | "text" | "transcribe">("words");
   const [versionName, setVersionName] = useState("");
+
+  useEffect(() => {
+    if (mode !== "transcribe") return;
+    warmTranscriber();
+  }, [mode]);
 
   const selected = words.find((w) => w.id === selectedWordId) ?? null;
 
@@ -84,6 +90,16 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
           )}
         >
           Text
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("transcribe")}
+          className={cn(
+            "h-8 rounded-md px-2.5 text-xs",
+            mode === "transcribe" ? "bg-elevated text-fg" : "text-muted hover:text-fg",
+          )}
+        >
+          Transcribe
         </button>
       </div>
 
@@ -157,8 +173,22 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
           spellCheck={false}
           className="mt-2 min-h-36 w-full flex-1 resize-none rounded-lg bg-elevated px-3 py-2 text-sm leading-relaxed text-fg shadow-[0_0_0_1px_rgba(242,239,232,0.08)] outline-none focus:shadow-[0_0_0_1px_rgba(236,231,220,0.45)]"
           data-studio-undo=""
-          placeholder="Paste lyrics, one phrase per line — or wait for the vocal to be transcribed."
+          placeholder="Paste lyrics, one phrase per line. Nothing is filled in until you sync or transcribe."
         />
+      ) : mode === "transcribe" ? (
+        <div className="mt-2 flex flex-1 flex-col gap-3 rounded-lg bg-elevated px-3 py-3 shadow-[0_0_0_1px_rgba(242,239,232,0.08)]">
+          <p className="text-sm text-muted">
+            Transcribe this snippet from the isolated vocal. If cloud speech-to-text is down, the browser model takes the same stem. Nothing is invented if both fail.
+          </p>
+          <Button type="button" onClick={() => void transcribe()} disabled={transcribing}>
+            {transcribing ? "Transcribing…" : "Transcribe instead"}
+          </Button>
+          {notice ? (
+            <p className={noticeError ? "text-sm text-danger" : "text-sm text-muted"} role={noticeError ? "alert" : "status"}>
+              {notice}
+            </p>
+          ) : null}
+        </div>
       ) : (
         <div className="mt-2 min-h-0 flex-1 overflow-y-scroll rounded-lg bg-elevated px-3 py-3 shadow-[0_0_0_1px_rgba(242,239,232,0.08)]">
           {lyrics.length ? (
