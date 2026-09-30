@@ -142,29 +142,40 @@ function VocalIsolate() {
   const audioUrl = useStudio((s) => s.audioUrl);
   const transcribing = useStudio((s) => s.transcribing);
   const [note, setNote] = useState<string | null>(null);
+  const [noteError, setNoteError] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const solo = async () => {
     setBusy(true);
+    setNoteError(false);
     setNote("Isolating vocals…");
     const stem = await prepareVocalStem({
       audioUrl,
       region,
       isolate: true,
-      onStatus: setNote,
+      onStatus: (label) => {
+        setNoteError(false);
+        setNote(label);
+      },
     });
     setBusy(false);
     if (!stem?.isolated) {
       setNote(stem?.error ?? "Vocal isolation failed.");
+      setNoteError(true);
       return;
     }
     const player = new Audio(stem.url);
-    player.onended = () => setNote("Isolated vocal is ready.");
+    player.onended = () => {
+      setNote("Isolated vocal is ready.");
+      setNoteError(false);
+    };
     try {
       await player.play();
       setNote(stem.cached ? "Playing the saved vocal stem." : "Playing the isolated vocal.");
+      setNoteError(false);
     } catch {
       setNote("Couldn’t play the vocal stem.");
+      setNoteError(true);
     }
   };
 
@@ -194,7 +205,7 @@ function VocalIsolate() {
           {busy ? "Isolating…" : "Solo vocal"}
         </Button>
         {note ? (
-          <p className={/down|failed|couldn/i.test(note) ? "text-xs text-danger" : "text-xs text-muted"} role={/down|failed|couldn/i.test(note) ? "alert" : "status"}>
+          <p className={noteError ? "text-xs text-danger" : "text-xs text-muted"} role={noteError ? "alert" : "status"}>
             {note}
           </p>
         ) : null}
@@ -215,6 +226,7 @@ function PasteLyrics() {
   const last = useStudio((s) => s.lastTranscribedRegion);
   const words = useStudio((s) => s.words);
   const notice = useStudio((s) => s.notice);
+  const noticeError = useStudio((s) => s.noticeError);
   const syncOffsetMs = useStudio((s) => s.syncOffsetMs);
   const setSyncOffset = useStudio((s) => s.setSyncOffset);
   const drifted = Boolean(
@@ -289,7 +301,7 @@ function PasteLyrics() {
         </div>
       ) : null}
       {notice ? (
-        <p className={/down|failed|couldn|error/i.test(notice) ? "mt-2 text-sm text-danger" : "mt-2 text-sm text-muted"} role={/down|failed|couldn|error/i.test(notice) ? "alert" : "status"}>
+        <p className={noticeError ? "mt-2 text-sm text-danger" : "mt-2 text-sm text-muted"} role={noticeError ? "alert" : "status"}>
           {notice}
         </p>
       ) : null}

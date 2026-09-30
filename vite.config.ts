@@ -51,6 +51,23 @@ function pgliteBootstrapPlugin(): Plugin {
   };
 }
 
+function lyricWorkersPlugin(): Plugin {
+  return {
+    name: "aftercut:lyric-workers",
+    apply: "serve",
+    async configureServer(server) {
+      try {
+        const mod = (await server.ssrLoadModule("/src/lib/studio/workers.server.ts")) as {
+          bootLyricWorkers?: () => void;
+        };
+        mod.bootLyricWorkers?.();
+      } catch (err) {
+        console.error("[lyric-workers] boot failed:", err);
+      }
+    },
+  };
+}
+
 /**
  * Live-preview OAuth popup — handled HERE so the agent never has to create a
  * `/auth/popup` route (and cannot break it by scaffolding a React page that
@@ -165,6 +182,7 @@ export default defineConfig(({ command, isPreview }) => ({
   },
   plugins: [
     pgliteBootstrapPlugin(),
+    lyricWorkersPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),
     // Dev-only /__app-env, read by scripts/check-auth-invariant.mjs.

@@ -66,6 +66,7 @@ type StudioState = {
   selectedWordId: string | null;
   error: string | null;
   notice: string | null;
+  noticeError: boolean;
   transcribeGen: number;
   captionPrefs: CaptionPrefs;
   packId: string;
@@ -178,6 +179,7 @@ const defaults = {
   selectedWordId: null as string | null,
   error: null as string | null,
   notice: null as string | null,
+  noticeError: false,
   transcribeGen: 0,
   captionPrefs: { ...DEFAULT_CAPTION_PREFS },
   packId: PACKS[0]?.id ?? "night",
@@ -340,6 +342,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     set({
       error: null,
       notice: null,
+      noticeError: false,
       trackName,
       transcribeGen: gen,
       lyricsDirty: false,
@@ -387,6 +390,7 @@ export const useStudio = create<StudioState>((set, get) => ({
           lyricsDirty: false,
           activeLyricId: saved.id,
           notice: `Restored “${saved.name}” for this song.`,
+          noticeError: false,
         });
         return;
       }
@@ -401,6 +405,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         transcribing: false,
         transcribeStatus: "",
         notice: "Snippet starts at the top of the song. Paste the lyrics, then press Sync lyrics.",
+        noticeError: false,
       });
     } catch (err) {
       set({
@@ -429,12 +434,13 @@ export const useStudio = create<StudioState>((set, get) => ({
     const last = get().lastTranscribedRegion;
     const moved = !regionClose(last, region);
     if (!opts?.preview) remember("region", sliceOf(get()));
+    const movedNotice = moved && last && get().words.length;
     set({
       region,
-      notice:
-        moved && last && get().words.length
-          ? "Snippet moved. Your edits stayed put — press Re-sync to new window if this section should be timed again."
-          : get().notice,
+      notice: movedNotice
+        ? "Snippet moved. Your edits stayed put — press Re-sync to new window if this section should be timed again."
+        : get().notice,
+      noticeError: movedNotice ? false : get().noticeError,
     });
   },
   setLyricDraft: (lyricDraft) => {
@@ -453,6 +459,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       lyricsDirty: true,
       transcribeSource: "manual",
       notice: null,
+      noticeError: false,
     });
     touchSavedLyrics(get, set);
   },
@@ -484,7 +491,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   syncLyrics: async () => {
     const text = get().lyricDraft.trim();
     if (!text) {
-      set({ notice: "Paste the lyrics for this section first." });
+      set({ notice: "Paste the lyrics for this section first.", noticeError: false });
       return;
     }
     if (!get().analysis) return;
@@ -495,6 +502,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       transcribing: true,
       lyricsDirty: false,
       notice: null,
+      noticeError: false,
       syncProgress: 0,
       transcribeStatus: get().isolateVocals ? "Isolating vocals…" : "Reading the full mix…",
     });
@@ -517,6 +525,7 @@ export const useStudio = create<StudioState>((set, get) => ({
           transcribeStatus: "",
           syncProgress: null,
           notice: stem.error ?? "Vocal isolation failed. Sync did not use the full mix.",
+          noticeError: true,
         });
         return;
       }
@@ -551,6 +560,7 @@ export const useStudio = create<StudioState>((set, get) => ({
           transcribeStatus: "",
           syncProgress: null,
           notice: [stem.error, aligned.ok ? aligned.warning : aligned.error].filter(Boolean).join(" ") || "Couldn’t align these lyrics.",
+          noticeError: true,
         });
         return;
       }
@@ -581,6 +591,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         lyricsDirty: false,
         selectedWordId: null,
         notice: [isolationNote, aligned.warning].filter(Boolean).join(" ") || null,
+        noticeError: false,
       });
     } catch (err) {
       if (get().transcribeGen !== gen) return;
@@ -589,6 +600,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         transcribeStatus: "",
         syncProgress: null,
         notice: err instanceof Error ? err.message : "Sync failed",
+        noticeError: true,
       });
     } finally {
       setHearing(false);
@@ -596,7 +608,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
   transcribe: async () => {
     const gen = get().transcribeGen + 1;
-    set({ transcribeGen: gen, transcribing: true, notice: null, lyricsDirty: false, transcribeStatus: get().isolateVocals ? "Isolating vocals…" : "Hearing lyrics…" });
+    set({ transcribeGen: gen, transcribing: true, notice: null, noticeError: false, lyricsDirty: false, transcribeStatus: get().isolateVocals ? "Isolating vocals…" : "Hearing lyrics…" });
     await runTranscribe(gen);
   },
   selectWord: (selectedWordId) => set({ selectedWordId }),
@@ -752,7 +764,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (!analysis) return;
     const clips = get().clips();
     if (!clips.length) {
-      set({ notice: "Add at least one clip first." });
+      set({ notice: "Add at least one clip first.", noticeError: false });
       return;
     }
     remember("generate", sliceOf(get()));
@@ -774,6 +786,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       step: "edit",
       mode: "single",
       notice: "One video, in the order you picked. Drag clips to reorder or resize them.",
+      noticeError: false,
     });
   },
   generate: () => {
@@ -830,7 +843,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     };
     const next = [version, ...lyricBank].slice(0, 40);
     persistLyricBank(next);
-    set({ lyricBank: next, activeLyricId: version.id, notice: `Saved “${version.name}” for this song.` });
+    set({ lyricBank: next, activeLyricId: version.id, notice: `Saved “${version.name}” for this song.`, noticeError: false });
   },
   loadLyricVersion: (id) => {
     const version = get().lyricBank.find((v) => v.id === id);
@@ -848,6 +861,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       activeLyricId: version.id,
       lastTranscribedRegion: region,
       notice: `Loaded “${version.name}”.`,
+      noticeError: false,
     });
   },
   deleteLyricVersion: (id) => {
@@ -956,6 +970,7 @@ async function runTranscribe(gen: number) {
         transcribing: false,
         transcribeStatus: "",
         notice: result.warning ?? "Couldn’t hear vocals in this clip.",
+        noticeError: true,
       });
       return;
     }
@@ -966,6 +981,7 @@ async function runTranscribe(gen: number) {
       transcribeSource: result.source,
       transcribeStatus: "",
       notice: result.warning,
+      noticeError: false,
       selectedWordId: null,
       lastTranscribedRegion: latest.region,
       lyricsDirty: false,

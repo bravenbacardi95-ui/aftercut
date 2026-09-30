@@ -36,6 +36,7 @@ export type UndoSlice = {
   packId: string;
   transcribeSource: TranscribeSource;
   notice: string | null;
+  noticeError: boolean;
   lastTranscribedRegion: Region | null;
 };
 
@@ -78,6 +79,7 @@ export function sliceOf(s: UndoSlice): UndoSlice {
     packId: s.packId,
     transcribeSource: s.transcribeSource,
     notice: s.notice,
+    noticeError: s.noticeError,
     lastTranscribedRegion: s.lastTranscribedRegion,
   };
 }

@@ -2,10 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createServerFn } from "@tanstack/react-start";
-import { pythonDaemon } from "./py-daemon";
-
-const SCRIPT = path.join(process.cwd(), "scripts", "isolate_vocals.py");
-const daemon = pythonDaemon({ key: "isolate", script: SCRIPT, label: "Vocal isolation" });
+import { isolateDaemon } from "./workers.server";
 
 export type IsolateResult =
   | { ok: true; wavBase64: string; ms: number; model: "htdemucs" }
@@ -25,7 +22,7 @@ export const isolateVocalStem = createServerFn({ method: "POST" })
     const output = path.join(dir, "vocal.wav");
     try {
       await writeFile(input, Buffer.from(raw, "base64"));
-      const message = await daemon.request({ wav: input, out: output }, 180000);
+      const message = await isolateDaemon.request({ wav: input, out: output }, 180000);
       if (message.ok !== true) {
         const detail = typeof message.error === "string" ? message.error : "Vocal isolation failed.";
         return { ok: false, error: detail, ms: Date.now() - started, model: "htdemucs" };

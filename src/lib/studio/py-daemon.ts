@@ -27,6 +27,7 @@ type Spec = {
   key: string;
   script: string;
   label: string;
+  timeoutMessage?: string;
 };
 
 type Pending = {
@@ -44,18 +45,44 @@ type State = {
   pending: Map<string, Pending>;
 };
 
-const pool = new Map<string, State>();
+const POOL_KEY = "__aftercutPythonDaemons";
+const globals = globalThis as typeof globalThis & { [POOL_KEY]?: Map<string, State> };
+const pool = globals[POOL_KEY] ?? new Map<string, State>();
+globals[POOL_KEY] = pool;
 
-function failAll(state: State, error: Error) {
-  state.ready = false;
-  const current = state.child;
-  state.child = null;
-  current?.kill();
+function killChild(child: ChildProcessWithoutNullStreams) {
+  const hard = setTimeout(() => {
+    if (child.exitCode == null && child.signalCode == null) {
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        /* already gone */
+      }
+    }
+  }, 1500);
+  hard.unref();
+  child.once("exit", () => clearTimeout(hard));
+  try {
+    child.kill("SIGTERM");
+  } catch {
+    clearTimeout(hard);
+  }
+}
+
+function rejectPending(state: State, error: Error) {
   for (const [id, job] of state.pending) {
     clearTimeout(job.timer);
     job.reject(error);
     state.pending.delete(id);
   }
+}
+
+function failAll(state: State, error: Error) {
+  state.ready = false;
+  const current = state.child;
+  state.child = null;
+  if (current) killChild(current);
+  rejectPending(state, error);
 }
 
 function ensure(state: State, spec: Spec): string | null {
@@ -76,7 +103,12 @@ function ensure(state: State, spec: Spec): string | null {
     },
   });
   state.child = child;
+  child.unref();
+  for (const stream of [child.stdin, child.stdout, child.stderr]) {
+    (stream as unknown as { unref?: () => void }).unref?.();
+  }
   child.stdout.on("data", (chunk) => {
+    if (state.child !== child) return;
     state.buffer += String(chunk);
     let nl = state.buffer.indexOf("\n");
     while (nl >= 0) {
@@ -104,19 +136,33 @@ function ensure(state: State, spec: Spec): string | null {
     }
   });
   child.stderr.on("data", (chunk) => {
+    if (state.child !== child) return;
     const text = String(chunk);
     state.stderr = (state.stderr + text).slice(-4000);
     const trimmed = text.trim();
     if (trimmed) console.info(trimmed);
   });
   child.on("exit", (code) => {
+    // A worker we already replaced must not tear down the new process.
+    if (state.child !== child) return;
     const detail = state.stderr.trim().split("\n").pop() || `process exited ${code ?? "unknown"}`;
     failAll(state, new Error(`${spec.label} is down. ${detail}`));
   });
   child.on("error", (err) => {
+    if (state.child !== child) return;
     failAll(state, new Error(`${spec.label} is down. ${err.message}`));
   });
   return null;
+}
+
+function restart(state: State, spec: Spec, child: ChildProcessWithoutNullStreams | null) {
+  if (child && state.child === child) {
+    state.child = null;
+    state.ready = false;
+  }
+  if (child) killChild(child);
+  const error = ensure(state, spec);
+  if (error) console.error(`[${spec.key}] restart failed: ${error}`);
 }
 
 function ask(state: State, spec: Spec, payload: Record<string, unknown>, timeoutMs: number) {
@@ -125,8 +171,11 @@ function ask(state: State, spec: Spec, payload: Record<string, unknown>, timeout
   const id = String(state.nextId++);
   return new Promise<Record<string, unknown>>((resolve, reject) => {
     const timer = setTimeout(() => {
-      state.pending.delete(id);
-      reject(new Error(`${spec.label} is down. No result came back before the timeout.`));
+      if (!state.pending.has(id)) return;
+      const stuck = state.child;
+      const message = spec.timeoutMessage ?? `${spec.label} is down. No result came back before the timeout.`;
+      rejectPending(state, new Error(message));
+      restart(state, spec, stuck);
     }, timeoutMs);
     state.pending.set(id, { resolve, reject, timer });
     const send = () => {
@@ -154,6 +203,9 @@ export function pythonDaemon(spec: Spec) {
     pool.set(spec.key, state);
   }
   return {
+    start() {
+      return ensure(state!, spec);
+    },
     request(payload: Record<string, unknown>, timeoutMs: number) {
       return ask(state!, spec, payload, timeoutMs);
     },

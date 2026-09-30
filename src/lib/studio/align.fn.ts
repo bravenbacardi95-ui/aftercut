@@ -2,10 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createServerFn } from "@tanstack/react-start";
-import { pythonDaemon } from "./py-daemon";
-
-const SCRIPT = path.join(process.cwd(), "scripts", "align_lyrics.py");
-const daemon = pythonDaemon({ key: "align", script: SCRIPT, label: "Aligner" });
+import { alignDaemon } from "./workers.server";
 
 export type ForcedWord = {
   text: string;
@@ -42,7 +39,7 @@ export const alignLyrics = createServerFn({ method: "POST" })
     const wav = path.join(dir, "stem.wav");
     try {
       await writeFile(wav, Buffer.from(raw, "base64"));
-      const message = await daemon.request(
+      const message = await alignDaemon.request(
         { wav, text: data.text, isolated: data.isolated, snap: Boolean(data.snap) },
         180000,
       );

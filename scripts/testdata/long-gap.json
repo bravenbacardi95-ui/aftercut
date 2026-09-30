@@ -1,0 +1,32 @@
+{
+  "text": "hello stay\nI keep running",
+  "durationS": 72.0,
+  "silence": [18.32, 49.15],
+  "words": [
+    {
+      "text": "hello",
+      "line": 0,
+      "startMs": 5000.0
+    },
+    {
+      "text": "stay",
+      "line": 0,
+      "startMs": 18000.0
+    },
+    {
+      "text": "I",
+      "line": 1,
+      "startMs": 49160.0
+    },
+    {
+      "text": "keep",
+      "line": 1,
+      "startMs": 50850.0
+    },
+    {
+      "text": "running",
+      "line": 1,
+      "startMs": 52550.0
+    }
+  ]
+}

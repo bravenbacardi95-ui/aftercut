@@ -22,6 +22,8 @@ import align_lyrics
 ROOT = Path(__file__).resolve().parent
 FIXTURE = ROOT / "testdata" / "known-phrase.json"
 WAV = ROOT / "testdata" / "known-phrase.wav"
+LONG_FIXTURE = ROOT / "testdata" / "long-gap.json"
+LONG_WAV = ROOT / "testdata" / "long-gap.wav"
 
 
 class AlignLyricsTest(unittest.TestCase):
@@ -149,6 +151,80 @@ class AlignLyricsTest(unittest.TestCase):
         boundary = [origin for origin in calls if origin > 30000]
         self.assertGreaterEqual(len(boundary), 2, f"boundary was not re-aligned: {calls}")
 
+    def test_repair_moves_low_confidence_words_and_rejects_bad_times(self) -> None:
+        rate = 16000
+        samples = np.full(rate * 72, 0.2, np.float32)
+        samples[int(rate * 43.6) : int(rate * 48.4)] = 0
+        chunks = align_lyrics.plan_chunks(72.0, align_lyrics.long_silences(samples, rate))
+        self.assertGreaterEqual(len(chunks), 2)
+        cut = chunks[0]["keep_end"] * 1000
+        self.assertLess(abs(43310 - cut), 3000)
+        self.assertLess(abs(43600 - cut), 3000)
+
+        def word(text: str, start: float, confidence: float, line: int = 1) -> dict:
+            return {
+                "text": text,
+                "line": line,
+                "rawStartMs": start,
+                "rawEndMs": start + 220,
+                "startMs": start,
+                "endMs": start + 220,
+                "confidence": confidence,
+            }
+
+        original = align_lyrics.align_span
+
+        def run(fake, placed):
+            align_lyrics.align_span = fake
+            try:
+                return align_lyrics.repair_split_words(samples, rate, placed, chunks)
+            finally:
+                align_lyrics.align_span = original
+
+        def good(_audio, _rate, words, _origin):
+            starts = {"I": 49160.0, "keep": 50800.0}
+            return [word(item["text"], starts[item["text"]], 0.91, item["line"]) for item in words]
+
+        fixed = run(
+            good,
+            [word("stay", 18000, 0.9, 0), word("I", 43310, 0.0), word("keep", 43600, 0.0)],
+        )
+        self.assertEqual(fixed[0]["startMs"], 18000)
+        self.assertEqual(fixed[1]["startMs"], 49160.0)
+        self.assertEqual(fixed[2]["startMs"], 50800.0)
+        self.assertGreater(fixed[1]["startMs"], 48400)
+        self.assertFalse(align_lyrics.in_silence(fixed[1]["startMs"], fixed[1]["endMs"], align_lyrics.long_silences(samples, rate)))
+
+        def backward(_audio, _rate, words, _origin):
+            return [word(item["text"], 12000.0, 0.4, item["line"]) for item in words]
+
+        stuck = run(
+            backward,
+            [word("stay", 18000, 0.9, 0), word("I", 43310, 0.0), word("keep", 43600, 0.0)],
+        )
+        self.assertEqual(stuck[1]["startMs"], 43310)
+        self.assertEqual(stuck[2]["startMs"], 43600)
+
+        def in_gap(_audio, _rate, words, _origin):
+            return [word(item["text"], 45000.0, 0.4, item["line"]) for item in words]
+
+        silent = run(
+            in_gap,
+            [word("stay", 18000, 0.9, 0), word("I", 43310, 0.0), word("keep", 43600, 0.0)],
+        )
+        self.assertEqual(silent[1]["startMs"], 43310)
+        self.assertEqual(silent[2]["startMs"], 43600)
+
+        calls: list[int] = []
+
+        def counting(*_args):
+            calls.append(1)
+            return []
+
+        skipped = run(counting, [word("stay", 18000, 0.9, 0), word("I", 43310, 0.8)])
+        self.assertEqual(calls, [])
+        self.assertEqual(skipped[1]["startMs"], 43310)
+
     def test_known_clip_word_starts(self) -> None:
         fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
         result = align_lyrics.align_wav(str(WAV), fixture["text"], True, False)
@@ -175,6 +251,37 @@ class AlignLyricsTest(unittest.TestCase):
         print(f"  mean={mean:.1f}ms worst={worst:.1f}ms")
         self.assertLess(mean, 40, f"mean error {mean:.1f}ms")
         self.assertLess(worst, 80, f"worst error {worst:.1f}ms")
+
+    def test_long_clip_words_stay_after_the_gap(self) -> None:
+        """Real MMS_FA on a 72s clip. Words after the split must not land in the silence before it."""
+        fixture = json.loads(LONG_FIXTURE.read_text(encoding="utf-8"))
+        samples, rate, _channels = align_lyrics.read_wav(str(LONG_WAV))
+        duration = samples.size / rate
+        self.assertGreater(duration, 70)
+        silences = align_lyrics.long_silences(samples, rate)
+        chunks = align_lyrics.plan_chunks(duration, silences)
+        self.assertGreaterEqual(len(chunks), 2, silences)
+        cut = chunks[0]["keep_end"]
+        self.assertTrue(any(start < cut < end for start, end in silences), silences)
+        gap = next(item for item in silences if item[0] < cut < item[1])
+        result = align_lyrics.align_wav(str(LONG_WAV), fixture["text"], True, False)
+        self.assertTrue(result["ok"], result.get("error"))
+        self.assertEqual(result["feed"]["method"], "wav2vec2-ctc-silence-chunks")
+        self.assertFalse(result["feed"]["snap"])
+        words = result["words"]
+        self.assertEqual([word["text"] for word in words], [item["text"] for item in fixture["words"]])
+        print("\nlong clip (snap off, silence chunks)")
+        for word, truth in zip(words, fixture["words"]):
+            error = float(word["startMs"]) - float(truth["startMs"])
+            print(
+                f"  {word['text']}\ttruth={truth['startMs']}\traw={word['rawStartMs']}\t"
+                f"conf={word['confidence']}\terr={error:+.1f}ms"
+            )
+            self.assertEqual(word["startMs"], word["rawStartMs"])
+            self.assertLess(abs(error), 400, f"{word['text']} is {error:+.1f}ms from the spoken onset")
+            if float(truth["startMs"]) > cut * 1000:
+                self.assertGreater(word["startMs"], cut * 1000, f"{word['text']} was kept before the split")
+                self.assertGreater(word["startMs"], gap[1] * 1000, f"{word['text']} landed in the pre-split silence")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,10 @@
 """wav2vec2 CTC forced alignment (torchaudio MMS_FA) for one vocal stem.
 
-Every word in the snippet is aligned in one pass over the whole stem.
-Line breaks come from the pasted text after that pass. Snapping to onsets
-is off unless the job asks for it. Times are relative to the wav that was passed in.
+Snippets up to 60 seconds are one pass over the whole stem. Longer snippets
+are split at long silences. Low-confidence words within 3 seconds of a split
+are aligned again on a 10 second window, and a time that jumps backward or
+lands in silence is rejected. Line breaks come from the pasted text. Snapping
+to onsets is off unless the job asks for it. Times are relative to the wav.
 """
 
 from __future__ import annotations
@@ -339,6 +341,28 @@ def align_span(samples: np.ndarray, rate: int, words: list[dict], origin_ms: flo
     return align_emission(forward(audio), int(audio.size), rate, words, origin_ms)
 
 
+def in_silence(start_ms: float, end_ms: float, silences: list[tuple[float, float]]) -> bool:
+    mid = (start_ms + end_ms) / 2.0
+    span = max(1.0, end_ms - start_ms)
+    for start_s, end_s in silences:
+        a = start_s * 1000.0
+        b = end_s * 1000.0
+        if a <= mid <= b:
+            return True
+        overlap = min(end_ms, b) - max(start_ms, a)
+        if overlap > 80 and overlap >= span * 0.5:
+            return True
+    return False
+
+
+def touches_silence(start_ms: float, end_ms: float, silences: list[tuple[float, float]]) -> bool:
+    for start_s, end_s in silences:
+        overlap = min(end_ms, end_s * 1000.0) - max(start_ms, start_s * 1000.0)
+        if overlap > 80:
+            return True
+    return False
+
+
 def fit_words(
     emission: torch.Tensor,
     n_samples: int,
@@ -346,6 +370,7 @@ def fit_words(
     words: list[dict],
     keep_end_rel_ms: float,
     origin_ms: float,
+    silences: list[tuple[float, float]],
 ) -> tuple[int, list[dict] | None]:
     cache: dict[int, list[dict] | None] = {}
 
@@ -354,22 +379,36 @@ def fit_words(
             cache[count] = align_emission(emission, n_samples, rate, words[:count], origin_ms)
         return cache[count]
 
+    def too_many(placed: list[dict]) -> bool:
+        last = placed[-1]
+        last_start = float(last["rawStartMs"]) - origin_ms
+        last_end = float(last["rawEndMs"]) - origin_ms
+        if last_start >= keep_end_rel_ms - 50 or last_end > keep_end_rel_ms + 30:
+            return True
+        # A collapsed token with almost no confidence was not heard in this chunk.
+        heard = float(last["rawEndMs"]) - float(last["rawStartMs"])
+        if float(last["confidence"]) < 0.04 and heard < 100:
+            return True
+        # A word dumped into the silence before the cut still ends before the split.
+        # A span that only clips the gap counts too: the midpoint can sit earlier.
+        cut_ms = origin_ms + keep_end_rel_ms
+        near_cut = [
+            gap
+            for gap in silences
+            if gap[1] * 1000.0 >= cut_ms - 4000 and gap[0] * 1000.0 <= cut_ms + 500
+        ]
+        return touches_silence(float(last["rawStartMs"]), float(last["rawEndMs"]), near_cut)
+
     lo, hi = 1, len(words)
     best = 1
     while lo <= hi:
         mid = (lo + hi) // 2
         placed = place(mid)
-        if not placed:
+        if not placed or too_many(placed):
             hi = mid - 1
             continue
-        last = placed[-1]
-        last_start = float(last["rawStartMs"]) - origin_ms
-        last_end = float(last["rawEndMs"]) - origin_ms
-        if last_start >= keep_end_rel_ms - 50 or last_end > keep_end_rel_ms + 30:
-            hi = mid - 1
-        else:
-            best = mid
-            lo = mid + 1
+        best = mid
+        lo = mid + 1
     return best, place(best)
 
 
@@ -418,9 +457,65 @@ def realign_boundaries(samples: np.ndarray, rate: int, placed: list[dict], chunk
     return placed
 
 
+def repair_split_words(samples: np.ndarray, rate: int, placed: list[dict], chunks: list[dict]) -> list[dict]:
+    """Re-align low-confidence words that landed near a chunk split.
+
+    fit_words used to keep words crammed into the silence before the cut, because
+    those times still end before the split. A fresh pass over [split-5s, split+5s]
+    hears only those words. A new time is kept only when it does not jump
+    backward past the previous word and does not sit in silence.
+    """
+    if len(chunks) < 2 or not placed:
+        return placed
+    silences = long_silences(samples, rate)
+    duration = samples.size / rate
+    for index in range(len(chunks) - 1):
+        cut = chunks[index]["keep_end"] * 1000.0
+        targets = [
+            i
+            for i, word in enumerate(placed)
+            if float(word["confidence"]) < 0.5 and abs(float(word["startMs"]) - cut) <= 3000.0
+        ]
+        if not targets:
+            continue
+        window_start = max(0.0, cut / 1000.0 - 5.0)
+        window_end = min(duration, cut / 1000.0 + 5.0)
+        a = int(round(window_start * rate))
+        b = max(a + 1, int(round(window_end * rate)))
+        source = [
+            {"text": placed[i]["text"], "line": placed[i]["line"], "pieces": normalize_pieces(placed[i]["text"])}
+            for i in targets
+        ]
+        fresh = align_span(samples[a:b], rate, source, window_start * 1000.0)
+        if not fresh or len(fresh) != len(targets):
+            continue
+        target_set = set(targets)
+        prev_start = float(placed[targets[0] - 1]["startMs"]) if targets[0] else float("-inf")
+        for item, idx in zip(fresh, targets):
+            word = placed[idx]
+            new_start = float(item["rawStartMs"])
+            new_end = float(item["rawEndMs"])
+            later = next(
+                (float(placed[k]["startMs"]) for k in range(idx + 1, len(placed)) if k not in target_set),
+                None,
+            )
+            jumps_back = new_start + 0.5 < prev_start
+            if jumps_back or in_silence(new_start, new_end, silences) or (later is not None and new_start >= later):
+                prev_start = max(prev_start, float(word["startMs"]))
+                continue
+            word["rawStartMs"] = item["rawStartMs"]
+            word["rawEndMs"] = item["rawEndMs"]
+            word["startMs"] = item["startMs"]
+            word["endMs"] = item["endMs"]
+            word["confidence"] = item["confidence"]
+            prev_start = new_start
+    return placed
+
+
 def align_chunked(samples: np.ndarray, rate: int, words: list[dict]) -> tuple[list[dict] | None, int]:
     duration = samples.size / rate
-    chunks = plan_chunks(duration, long_silences(samples, rate))
+    silences = long_silences(samples, rate)
+    chunks = plan_chunks(duration, silences)
     print(
         "[align] chunk-plan " + json.dumps([{key: round(value, 3) for key, value in chunk.items()} for chunk in chunks]),
         file=sys.stderr,
@@ -447,7 +542,15 @@ def align_chunked(samples: np.ndarray, rate: int, words: list[dict]) -> tuple[li
             break
         origin = chunk["audio_start"] * 1000
         keep_end_rel = (chunk["keep_end"] - chunk["audio_start"]) * 1000
-        count, part = fit_words(emissions[index], int(chunk["n_samples"]), rate, remaining, keep_end_rel, origin)
+        count, part = fit_words(
+            emissions[index],
+            int(chunk["n_samples"]),
+            rate,
+            remaining,
+            keep_end_rel,
+            origin,
+            silences,
+        )
         if not part:
             return None, len(chunks)
         placed.extend(part)
@@ -460,7 +563,8 @@ def align_chunked(samples: np.ndarray, rate: int, words: list[dict]) -> tuple[li
         if part is None:
             return None, len(chunks)
         placed.extend(part)
-    return realign_boundaries(samples, rate, placed, chunks), len(chunks)
+    placed = realign_boundaries(samples, rate, placed, chunks)
+    return repair_split_words(samples, rate, placed, chunks), len(chunks)
 
 
 def align_wav(path: str, text: str, isolated: bool, snap: bool = False) -> dict:

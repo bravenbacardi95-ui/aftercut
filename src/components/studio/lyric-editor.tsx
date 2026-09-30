@@ -19,6 +19,7 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
   const transcribeStatus = useStudio((s) => s.transcribeStatus);
   const source = useStudio((s) => s.transcribeSource);
   const notice = useStudio((s) => s.notice);
+  const noticeError = useStudio((s) => s.noticeError);
   const words = useStudio((s) => s.words);
   const lyrics = useStudio((s) => s.lyrics);
   const selectedWordId = useStudio((s) => s.selectedWordId);
@@ -278,7 +279,7 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
       </div>
       ) : null}
       {notice ? (
-        <p className={/down|failed|couldn|error/i.test(notice) ? "mt-2 text-sm text-danger" : "mt-2 text-xs text-muted"} role={/down|failed|couldn|error/i.test(notice) ? "alert" : "status"}>
+        <p className={noticeError ? "mt-2 text-sm text-danger" : "mt-2 text-xs text-muted"} role={noticeError ? "alert" : "status"}>
           {notice}
         </p>
       ) : null}

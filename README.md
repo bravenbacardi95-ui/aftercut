@@ -9,9 +9,9 @@ Vocal isolation and alignment run on the machine that starts the app. They are n
 | Vocal isolation | Resident `scripts/isolate_vocals.py` (HTDemucs), started from `src/lib/studio/isolate.fn.ts` |
 | Forced alignment | Resident `scripts/align_lyrics.py` (torchaudio MMS_FA wav2vec2 CTC), started from `src/lib/studio/align.fn.ts` |
 
-Sync aligns every pasted word in one MMS_FA pass over the whole vocal stem, then keeps the line breaks from the paste. Snippets longer than 60 seconds are split at long silences, with overlap, and the words on that boundary are aligned again. Onset snap is off unless you turn it on. It can move a start at most 40 ms earlier or later, and only onto an onset in the isolated stem.
+Sync aligns every pasted word in one MMS_FA pass over the whole vocal stem, then keeps the line breaks from the paste. Snippets longer than 60 seconds are split at long silences, with overlap, and the words on that boundary are aligned again. A word under 0.5 confidence within 3 seconds of a split is aligned once more on the 10 seconds around that split. A time that jumps backward or lands in silence is rejected. Onset snap is off unless you turn it on. It can move a start at most 40 ms earlier or later, and only onto an onset in the isolated stem.
 
-The Node server keeps one Python process for alignment and one for Demucs. Both use `ALIGNER_PYTHON`. They do not call `python3` from `PATH`. If that interpreter is missing, or a worker dies, Sync shows the error and stops. A failed isolation does not fall back to the full mix.
+The dev server starts the alignment worker and the Demucs worker as it boots. Both use `ALIGNER_PYTHON`. They do not call `python3` from `PATH`. A job that runs longer than 3 minutes stops that worker and starts a fresh one, so the next sync is not stuck behind it. Sync then says “Sync timed out, try a shorter snippet”. If the interpreter is missing, or a worker dies, Sync shows the error and stops. A failed isolation does not fall back to the full mix.
 
 ## Requirements
 
