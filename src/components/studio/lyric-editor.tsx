@@ -277,7 +277,11 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
         <p className="text-xs text-subtle">Click a word to jump. Double-click to rename. Timing lives on the timeline.</p>
       </div>
       ) : null}
-      {notice ? <p className="mt-2 text-xs text-muted">{notice}</p> : null}
+      {notice ? (
+        <p className={/down|failed|couldn|error/i.test(notice) ? "mt-2 text-sm text-danger" : "mt-2 text-xs text-muted"} role={/down|failed|couldn|error/i.test(notice) ? "alert" : "status"}>
+          {notice}
+        </p>
+      ) : null}
     </div>
   );
 }

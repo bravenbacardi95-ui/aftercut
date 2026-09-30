@@ -136,6 +136,8 @@ function SetupForm({
 function VocalIsolate() {
   const isolateVocals = useStudio((s) => s.isolateVocals);
   const setIsolateVocals = useStudio((s) => s.setIsolateVocals);
+  const onsetSnap = useStudio((s) => s.onsetSnap);
+  const setOnsetSnap = useStudio((s) => s.setOnsetSnap);
   const region = useStudio((s) => s.region);
   const audioUrl = useStudio((s) => s.audioUrl);
   const transcribing = useStudio((s) => s.transcribing);
@@ -177,11 +179,25 @@ function VocalIsolate() {
         />
         Isolate vocals (recommended)
       </label>
+      <label className="flex items-center gap-2 text-sm text-fg">
+        <input
+          type="checkbox"
+          checked={onsetSnap}
+          onChange={(e) => setOnsetSnap(e.target.checked)}
+          disabled={transcribing}
+        />
+        Snap starts to onsets
+      </label>
+      <p className="text-xs text-muted">Off by default. Applies on the next sync. At most 40 ms earlier or later, and only on the isolated vocal.</p>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="secondary" size="sm" onClick={() => void solo()} disabled={busy || transcribing}>
           {busy ? "Isolating…" : "Solo vocal"}
         </Button>
-        {note ? <p className="text-xs text-muted">{note}</p> : null}
+        {note ? (
+          <p className={/down|failed|couldn/i.test(note) ? "text-xs text-danger" : "text-xs text-muted"} role={/down|failed|couldn/i.test(note) ? "alert" : "status"}>
+            {note}
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -272,7 +288,11 @@ function PasteLyrics() {
           <p className="mt-1 text-sm text-fg">{transcribeStatus || "Working…"}</p>
         </div>
       ) : null}
-      {notice ? <p className="mt-2 text-sm text-muted">{notice}</p> : null}
+      {notice ? (
+        <p className={/down|failed|couldn|error/i.test(notice) ? "mt-2 text-sm text-danger" : "mt-2 text-sm text-muted"} role={/down|failed|couldn|error/i.test(notice) ? "alert" : "status"}>
+          {notice}
+        </p>
+      ) : null}
     </div>
   );
 }

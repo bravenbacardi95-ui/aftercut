@@ -1,0 +1,30 @@
+{
+  "text": "hello from\nthe other side",
+  "words": [
+    {
+      "text": "hello",
+      "line": 0,
+      "startMs": 408.0
+    },
+    {
+      "text": "from",
+      "line": 0,
+      "startMs": 1108.0
+    },
+    {
+      "text": "the",
+      "line": 1,
+      "startMs": 1808.0
+    },
+    {
+      "text": "other",
+      "line": 1,
+      "startMs": 2608.0
+    },
+    {
+      "text": "side",
+      "line": 1,
+      "startMs": 3508.0
+    }
+  ]
+}

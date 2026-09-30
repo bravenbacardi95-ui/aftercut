@@ -48,6 +48,9 @@ export async function transcribeRegion(
       onStatus: opts.onStatus,
     });
     if (!stem) return empty("Couldn’t read this clip. Try a shorter snippet, or drop the track again.");
+    if (!stem.isolated) {
+      return empty(stem.error ?? "Vocal isolation failed. The full mix was not used.");
+    }
     const heard = await listenCloud(stem.blob, opts.onStatus);
     if (heard.ok && (heard.words.length || heard.text.trim())) {
       opts.onStatus?.("Placing each word on the vocal…");
@@ -126,6 +129,7 @@ export async function hearSnippetWords(
   if (audioUrl) await ensureDecoded(audioUrl);
   const stem = await prepareVocalStem({ audioUrl, region, isolate, onStatus });
   if (!stem) return { words: [], warning: "Couldn’t read this clip. Drop the track again." };
+  if (isolate && !stem.isolated) return { words: [], warning: stem.error ?? "Vocal isolation failed. The full mix was not used." };
   try {
     const result = await listenCloud(stem.blob, onStatus);
     if (!result.ok) return { words: [], warning: joinWarning(stem.error, result.error) };

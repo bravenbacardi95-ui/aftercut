@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { setDecodedAudio } from "./audio-clip";
+import { setDecodedAudio } from "./audio-clip.ts";
 import type { LyricWord } from "./types";
-import { atomsFromEnvelope, layoutOnAtoms, lockWordsToSinging } from "./vocal-activity";
+import { atomsFromEnvelope, layoutOnAtoms, lockWordsToSinging } from "./vocal-activity.ts";
 
 function word(text: string, start: number, end: number): LyricWord {
   return { id: text, text, start, end, line: 0 };

@@ -1,6 +1,6 @@
-import { getDecodedAudio } from "./audio-clip";
+import { getDecodedAudio } from "./audio-clip.ts";
 import type { LyricWord, Region } from "./types";
-import { yieldToPaint } from "./yield";
+import { yieldToPaint } from "./yield.ts";
 
 export type VocalAtom = { start: number; end: number };
 
@@ -143,7 +143,12 @@ export function lockWordsToSinging(words: LyricWord[], region: Region): LyricWor
   if (!sorted.length) return [];
   const atoms = singingAtoms(region);
   if (atoms.length < 1) return sorted;
-  const locked = trySnap(sorted, atoms, region) ?? layoutOnAtoms(sorted, atoms, region);
+  const seated = sorted.filter((word) => {
+    const mid = (word.start + word.end) / 2;
+    return atoms.some((atom) => mid >= atom.start - 0.04 && mid <= atom.end + 0.04);
+  }).length;
+  const snapped = seated * 2 >= sorted.length ? trySnap(sorted, atoms, region) : null;
+  const locked = snapped ?? layoutOnAtoms(sorted, atoms, region);
   return separate(locked);
 }
 

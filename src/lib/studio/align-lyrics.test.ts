@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { alignPastedLyrics, placeOnSpans } from "./align-lyrics.ts";
+import { alignPastedLyrics } from "./align-lyrics.ts";
 
 // Sung phrase on a beat, not speech. Times are the vocal's own onsets:
 // short words, a held "running", then a breath before "through".
@@ -43,20 +43,4 @@ test("sung line locks to vocal onsets instead of an even grid", () => {
   const actual = result.words.map((word) => word.startMs);
   assert.notDeepEqual(actual, even);
   assert.ok(actual[actual.length - 1]! < 4000, "the phrase should finish with the vocal, not the end of the snippet");
-});
-
-test("a miss still lands the pasted line on the vocal, not on an even grid", () => {
-  const spans = [
-    { text: "noise", startMs: 400, endMs: 900 },
-    { text: "noise", startMs: 2800, endMs: 3600 },
-  ];
-  const result = placeOnSpans("I keep running through", spans, 0, 8000);
-  assert.deepEqual(
-    result.words.map((word) => word.text),
-    ["I", "keep", "running", "through"],
-  );
-  assert.ok(result.words.every((word) => word.lowConfidence));
-  assert.ok(result.words[0]!.startMs >= 400 && result.words[0]!.startMs < 900);
-  assert.ok(result.words[result.words.length - 1]!.endMs <= 3600);
-  assert.ok(result.words.every((word) => word.startMs < 4000));
 });

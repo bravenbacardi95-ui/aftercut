@@ -103,68 +103,6 @@ export function alignPastedLyrics(paste: string, heard: HeardWord[], windowEndMs
   };
 }
 
-export function placeOnSpans(paste: string, spans: HeardWord[], windowStartMs: number, windowEndMs: number): AlignResult {
-  const tokens = tokenizePaste(paste);
-  if (!tokens.length) return { words: [], draft: "", warning: "Paste the lyrics for this section first." };
-  const vocal = spans
-    .map((span) => ({ startMs: Math.max(windowStartMs, span.startMs), endMs: Math.min(windowEndMs, span.endMs) }))
-    .filter((span) => span.endMs - span.startMs >= 30)
-    .sort((a, b) => a.startMs - b.startMs);
-  const usable = vocal.length
-    ? vocal
-    : [{ startMs: windowStartMs, endMs: windowEndMs }];
-  const budget = usable.reduce((sum, span) => sum + (span.endMs - span.startMs), 0);
-  const maxWords = Math.max(1, Math.floor(budget / 90));
-  let kept = tokens;
-  let trimmed = false;
-  if (tokens.length > maxWords) {
-    kept = tokens.slice(0, maxWords);
-    const lastLine = kept[kept.length - 1]!.line;
-    kept = tokens.filter((token) => token.line < lastLine);
-    if (!kept.length) kept = tokens.slice(0, maxWords);
-    trimmed = kept.length < tokens.length;
-  }
-  const weights = kept.map((token) => Math.max(1, token.norm.length));
-  const total = weights.reduce((sum, n) => sum + n, 0);
-  const lineOrder: number[] = [];
-  for (const token of kept) if (!lineOrder.includes(token.line)) lineOrder.push(token.line);
-  const lineIndex = new Map(lineOrder.map((line, index) => [line, index]));
-  let cursor = 0;
-  const words: AlignedWord[] = kept.map((token, index) => {
-    const share = (weights[index] ?? 1) / total;
-    const start = cursor;
-    cursor += share;
-    const a = atFraction(usable, start);
-    const b = atFraction(usable, Math.min(0.999, cursor));
-    return {
-      text: token.text,
-      line: lineIndex.get(token.line) ?? 0,
-      startMs: a,
-      endMs: Math.max(a + 40, b),
-      lowConfidence: true,
-    };
-  });
-  const draft = lineOrder.map((line) => kept.find((token) => token.line === line)?.lineText ?? "").join("\n");
-  return {
-    words,
-    draft,
-    warning: trimmed
-      ? "Couldn’t tell which lines are in this snippet, so the first lines were placed on the vocal and outlined in red."
-      : "These words are on the vocal, but the match wasn’t confident. They’re outlined in red.",
-  };
-}
-
-function atFraction(spans: { startMs: number; endMs: number }[], fraction: number) {
-  const total = spans.reduce((sum, span) => sum + (span.endMs - span.startMs), 0);
-  let left = Math.max(0, Math.min(0.999, fraction)) * total;
-  for (const span of spans) {
-    const dur = span.endMs - span.startMs;
-    if (left <= dur) return Math.round(span.startMs + left);
-    left -= dur;
-  }
-  return Math.round(spans[spans.length - 1]?.endMs ?? 0);
-}
-
 function tokenizePaste(paste: string): PasteToken[] {
   const lines = paste.replace(/\r\n/g, "\n").split("\n");
   const tokens: PasteToken[] = [];

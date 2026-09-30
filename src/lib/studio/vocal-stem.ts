@@ -59,17 +59,16 @@ export async function prepareVocalStem(opts: {
   const wavBase64 = await blobToBase64(slice);
   const result = await isolateVocalStem({ data: { wavBase64 } });
   if (!result.ok) {
-    opts.onStatus?.("Isolation failed. Using the full mix.");
-    const mix = (await encodeLyricWav(opts.region.start, opts.region.end, "center")) ?? (await encodeClipWav(opts.region.start, opts.region.end, false));
-    if (!mix) return null;
+    const detail = result.error || "Vocal isolation failed.";
+    const error = /is down|failed/i.test(detail) ? detail : `Vocal isolation failed: ${detail}`;
     return {
-      blob: mix.blob,
-      offset: mix.offset,
+      blob: new Blob([], { type: "audio/wav" }),
+      offset: padStart,
       isolated: false,
       cached: false,
-      error: `Vocal isolation failed: ${result.error} Using the full mix.`,
+      error,
       ms: result.ms,
-      url: URL.createObjectURL(mix.blob),
+      url: "",
     };
   }
 

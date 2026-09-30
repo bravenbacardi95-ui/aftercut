@@ -96,6 +96,8 @@ type StudioState = {
   transcribe: () => Promise<void>;
   isolateVocals: boolean;
   setIsolateVocals: (on: boolean) => void;
+  onsetSnap: boolean;
+  setOnsetSnap: (on: boolean) => void;
   syncOffsetMs: number;
   setSyncOffset: (ms: number) => void;
   nudgeLine: (line: number, deltaMs: number) => void;
@@ -170,6 +172,7 @@ const defaults = {
   lastTranscribedRegion: null as Region | null,
   isDemo: false,
   isolateVocals: true,
+  onsetSnap: false,
   syncOffsetMs: 0,
   snapEnabled: true,
   selectedWordId: null as string | null,
@@ -454,6 +457,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     touchSavedLyrics(get, set);
   },
   setIsolateVocals: (isolateVocals) => set({ isolateVocals }),
+  setOnsetSnap: (onsetSnap) => set({ onsetSnap }),
   setSyncOffset: (ms) => {
     const next = Math.max(-200, Math.min(200, Math.round(ms)));
     const delta = (next - get().syncOffsetMs) / 1000;
@@ -492,7 +496,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       lyricsDirty: false,
       notice: null,
       syncProgress: 0,
-      transcribeStatus: "Isolating vocals…",
+      transcribeStatus: get().isolateVocals ? "Isolating vocals…" : "Reading the full mix…",
     });
     setHearing(true);
     try {
@@ -507,12 +511,22 @@ export const useStudio = create<StudioState>((set, get) => ({
       });
       if (get().transcribeGen !== gen) return;
       if (!stem) throw new Error("The track isn’t ready yet. Drop it again.");
-      set({ transcribeStatus: "Aligning each line…", syncProgress: null });
+      if (get().isolateVocals && !stem.isolated) {
+        set({
+          transcribing: false,
+          transcribeStatus: "",
+          syncProgress: null,
+          notice: stem.error ?? "Vocal isolation failed. Sync did not use the full mix.",
+        });
+        return;
+      }
+      set({ transcribeStatus: "Aligning the vocal…", syncProgress: null });
       const aligned = await alignLyrics({
         data: {
           wavBase64: await blobToBase64(stem.blob),
           text,
           isolated: stem.isolated,
+          snap: get().onsetSnap,
         },
       });
       if (get().transcribeGen !== gen) return;
@@ -525,6 +539,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       if (aligned.ok) {
         console.info("[sync] first words", aligned.words.slice(0, 10).map((word) => ({
           text: word.text,
+          rawStartMs: Math.round(word.rawStartMs + offsetMs),
           startMs: Math.round(word.startMs + offsetMs),
           endMs: Math.round(word.endMs + offsetMs),
           confidence: word.confidence,
@@ -936,6 +951,14 @@ async function runTranscribe(gen: number) {
     });
     const latest = useStudio.getState();
     if (latest.transcribeGen !== gen) return;
+    if (!result.words.length) {
+      useStudio.setState({
+        transcribing: false,
+        transcribeStatus: "",
+        notice: result.warning ?? "Couldn’t hear vocals in this clip.",
+      });
+      return;
+    }
     remember("hear", sliceOf(latest));
     useStudio.setState({
       ...commitWords(result.words),

@@ -1,4 +1,4 @@
-import { yieldToPaint } from "./yield";
+import { yieldToPaint } from "./yield.ts";
 
 const TARGET_RATE = 16000;
 const MAX_SECONDS = 45;
