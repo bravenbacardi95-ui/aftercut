@@ -29,6 +29,14 @@ export function DesktopShell({ children }: { children: ReactNode }) {
   const error = useStudio((s) => s.error);
   const transcribing = useStudio((s) => s.transcribing);
   const transcribeStatus = useStudio((s) => s.transcribeStatus);
+  const exporting = useStudio((s) => s.exporting);
+  const batchRows = useStudio((s) => s.batchRows);
+  const batchNote = useStudio((s) => s.batchNote);
+  const cancelBatchExport = useStudio((s) => s.cancelBatchExport);
+  const batching = exporting && batchRows.length > 0;
+  const batchDone = batchRows.filter((row) => row.progress >= 1).length;
+  const batchCurrent = batchRows.find((row) => row.progress < 1);
+  const batchIndex = Math.min(batchRows.length, batchDone + (batchCurrent ? 1 : 0));
   const windows = mode === "batch" ? BATCH : SINGLE;
   const current =
     windows.find((w) => pathname === w.to || pathname.startsWith(`${w.to}/`)) ??
@@ -109,6 +117,26 @@ export function DesktopShell({ children }: { children: ReactNode }) {
       {error ? (
         <p className="shrink-0 border-b border-border bg-elevated px-4 py-2 text-sm text-danger" role="alert">
           {error}
+        </p>
+      ) : null}
+      {batching ? (
+        <div className="flex shrink-0 items-center gap-3 border-b border-border bg-elevated px-4 py-2 text-sm text-fg" role="status">
+          <LoaderCircle className="size-4 shrink-0 animate-spin text-muted" />
+          <span className="min-w-0 truncate">
+            Exporting {batchIndex} of {batchRows.length}
+            {batchCurrent ? ` · ${batchCurrent.label}` : ""}
+          </span>
+          <div className="hidden h-1 w-24 overflow-hidden rounded-full bg-bg sm:block">
+            <div className="h-full bg-accent" style={{ width: `${Math.round((batchCurrent?.progress ?? 1) * 100)}%` }} />
+          </div>
+          <button type="button" className="ml-auto shrink-0 text-sm text-muted hover:text-fg" onClick={() => cancelBatchExport()}>
+            Cancel
+          </button>
+        </div>
+      ) : null}
+      {!exporting && batchNote ? (
+        <p className="shrink-0 border-b border-border bg-elevated px-4 py-2 text-sm text-muted" role="status">
+          {batchNote}
         </p>
       ) : null}
       <div className="min-h-0 flex-1 overflow-hidden">{children}</div>

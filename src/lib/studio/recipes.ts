@@ -183,6 +183,31 @@ export function retargetRecipe(recipe: Recipe, region: Region, analysis: AudioAn
   return { ...recipe, cuts, clipIds };
 }
 
+export function shiftCuts(cuts: number[], from: Region, to: Region): number[] {
+  if (cuts.length < 2) return [to.start, to.end];
+  const span = Math.max(0.001, from.end - from.start);
+  const nextSpan = to.end - to.start;
+  const mapped = cuts.map((t, i) => {
+    if (i === 0) return to.start;
+    if (i === cuts.length - 1) return to.end;
+    return to.start + ((t - from.start) / span) * nextSpan;
+  });
+  for (let i = 1; i < mapped.length - 1; i++) {
+    const min = mapped[i - 1]! + 0.22;
+    const max = mapped[i + 1]! - 0.22;
+    mapped[i] = max > min ? Math.min(max, Math.max(min, mapped[i]!)) : mapped[i - 1]! + 0.22;
+  }
+  mapped[0] = to.start;
+  mapped[mapped.length - 1] = to.end;
+  return mapped;
+}
+
+/** Rebuild beat cuts, unless the version was edited by hand — those shift with the window. */
+export function followRegion(recipe: Recipe, from: Region, to: Region, analysis: AudioAnalysis): Recipe {
+  if (recipe.cutsEdited) return { ...recipe, cuts: shiftCuts(recipe.cuts, from, to) };
+  return retargetRecipe(recipe, to, analysis);
+}
+
 export function segmentIndexAt(cuts: number[], t: number): number {
   let i = 0;
   while (i < cuts.length - 1 && cuts[i + 1]! <= t) i++;

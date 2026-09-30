@@ -77,6 +77,8 @@ export type Recipe = {
   /** One clip id per segment between cuts. Owned by this version. */
   clipIds: string[];
   cuts: number[];
+  /** Split, join, or a dragged cut. Snippet moves shift these instead of rebuilding them. */
+  cutsEdited?: boolean;
 };
 
 export type Region = { start: number; end: number };

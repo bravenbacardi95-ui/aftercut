@@ -26,6 +26,7 @@ export function RegionScrubber() {
   setRef.current = setRegion;
   const setScrubbingRef = useRef(setScrubbing);
   setScrubbingRef.current = setScrubbing;
+  const pendingRegion = useRef<Region | null>(null);
 
   if (!analysis) return null;
   const dur = analysis.duration || 1;
@@ -66,7 +67,8 @@ export function RegionScrubber() {
       if (kind === "start") next = { start: Math.min(t, end - 3), end };
       else if (kind === "end") next = { start, end: Math.max(t, start + 3) };
       else next = { start: start + (t - origin), end: start + (t - origin) + span };
-      setRef.current(next);
+      pendingRegion.current = next;
+      setRef.current(next, { preview: true });
     };
     const up = () => {
       try {
@@ -80,9 +82,12 @@ export function RegionScrubber() {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       setScrubbingRef.current(false);
-      if (kind !== "play") endEdit();
       if (kind !== "play") {
-        const r = regionRef.current;
+        const committed = pendingRegion.current;
+        pendingRegion.current = null;
+        if (committed) setRef.current(committed);
+        endEdit();
+        const r = committed ?? regionRef.current;
         void playFromRef.current(r.start, r);
       }
     };

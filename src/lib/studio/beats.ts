@@ -183,15 +183,9 @@ export function makeCuts(
   for (const c of cuts) {
     if (!cleaned.length || c - cleaned[cleaned.length - 1] > 0.22) cleaned.push(c);
   }
-  if (cleaned.length >= 3) {
-    const i = 1 + (mix(9) % (cleaned.length - 2));
-    const min = cleaned[i - 1]! + 0.24;
-    const max = cleaned[i + 1]! - 0.24;
-    if (max > min) cleaned[i] = min + ((mix(10) % 1000) / 1000) * (max - min);
-  } else if (cleaned.length === 2 && cleaned[1]! - cleaned[0]! > 0.9) {
-    const span = cleaned[1]! - cleaned[0]!;
-    const at = cleaned[0]! + span * (0.28 + (mix(11) % 50) / 100);
-    cleaned.splice(1, 0, Math.min(cleaned[1]! - 0.3, Math.max(cleaned[0]! + 0.3, at)));
+  if (cleaned.length === 2 && inRange.length) {
+    const beat = inRange[mix(9) % inRange.length]!;
+    if (beat - cleaned[0]! > 0.22 && cleaned[1]! - beat > 0.22) cleaned.splice(1, 0, beat);
   }
   return cleaned;
 }

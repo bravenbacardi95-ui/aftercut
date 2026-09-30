@@ -58,6 +58,10 @@ export function PlayerCanvas({
     let lastGen = -1;
     const loop = (now: number) => {
       if (!alive) return;
+      if (useStudio.getState().exporting) {
+        id = requestAnimationFrame(loop);
+        return;
+      }
       if (typeof document !== "undefined" && document.hidden) {
         if (lastVideoKey) {
           setPackVideoPlaying(false);
@@ -132,7 +136,7 @@ export function PlayerCanvas({
       alive = false;
       cancelAnimationFrame(id);
       window.clearTimeout(timer);
-      setPackVideoPlaying(false);
+      if (!useStudio.getState().exporting) setPackVideoPlaying(false);
     };
   }, [timeRef, playingRef]);
 

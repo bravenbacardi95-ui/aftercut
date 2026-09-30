@@ -55,10 +55,11 @@ export function EditorWindow() {
   const [message, setMessage] = useState<string | null>(null);
 
   const onExport = async () => {
-    if (!audioUrl || !recipe) return;
+    if (!audioUrl || !recipe || useStudio.getState().exporting) return;
     setBusy(true);
     setMessage(null);
     setProgress(0);
+    useStudio.setState({ exporting: true, batchRows: [], batchNote: null });
     try {
       const blob = await exportRecipe({
         recipe,
@@ -77,6 +78,7 @@ export function EditorWindow() {
       setMessage(err instanceof Error ? err.message : "Export failed");
     } finally {
       setBusy(false);
+      useStudio.setState({ exporting: false });
     }
   };
 
@@ -197,10 +199,11 @@ function StyleInspector({
   const sizes: CaptionSizeId[] = ["s", "m", "l"];
   const positions: CaptionPosId[] = ["top", "mid", "low"];
   const cases: CaptionCaseId[] = ["as-is", "upper"];
+  const exporting = useStudio((s) => s.exporting);
   if (!recipe) return <p className="text-sm text-muted">Open a version from the wall to restyle it.</p>;
   return (
     <div className="flex flex-col gap-5">
-      <Button type="button" onClick={onExport} disabled={busy || !recipe}>
+      <Button type="button" onClick={onExport} disabled={busy || exporting || !recipe}>
         <Download className="size-4" />
         {busy ? `Exporting ${Math.round(progress * 100)}%` : "Export video"}
       </Button>

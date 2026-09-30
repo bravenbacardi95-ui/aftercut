@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { analyzeAudio } from "./beats";
 import { setHearing } from "./yield";
 import { DEFAULT_CUT_IDS, DEMO_LYRICS, PACKS, resolveCutClips } from "./packs";
+import { downloadZip, exportRecipeBatch, type BatchExportRow } from "./export-batch";
 import {
   applyDraft,
   insertAfter,
@@ -15,7 +16,7 @@ import {
   wordsToDraft,
   nextWordId,
 } from "./lyrics";
-import { buildRecipes, buildSingleRecipe, moveCutTime, moveSegmentTo, removeCutAt, retargetRecipe, splitCuts } from "./recipes";
+import { buildRecipes, buildSingleRecipe, followRegion, moveCutTime, moveSegmentTo, removeCutAt, splitCuts } from "./recipes";
 import { findSavedLyrics, loadLyricBank, lyricKey, persistLyricBank, type LyricVersion } from "./lyric-bank";
 import { commitWords, transcribeRegion } from "./transcribe";
 import { alignLyrics } from "./align.fn";
@@ -89,6 +90,11 @@ type StudioState = {
   recipes: Recipe[];
   selectedId: string | null;
   generating: boolean;
+  exporting: boolean;
+  batchRows: BatchExportRow[];
+  batchNote: string | null;
+  exportBatch: () => Promise<void>;
+  cancelBatchExport: () => void;
   setStep: (step: StudioStep) => void;
   loadFile: (file: File, isDemo?: boolean) => Promise<void>;
   loadDemo: () => Promise<void>;
@@ -203,6 +209,9 @@ const defaults = {
   recipes: [] as Recipe[],
   selectedId: null as string | null,
   generating: false,
+  exporting: false,
+  batchRows: [] as BatchExportRow[],
+  batchNote: null as string | null,
   lyricBank: loadLyricBank(),
   activeLyricId: null as string | null,
   canUndo: false,
@@ -324,13 +333,20 @@ function syncSingleCut(get: () => StudioState, set: (partial: Partial<StudioStat
     clipIds: clips.map((clip) => clip.id),
     region,
     analysis,
-    style: captionStyles[0] ?? "word",
-    font: fonts[0] ?? "brat",
-    effect: captionEffects[0] ?? "none",
-    look: looks[0] ?? "film",
-    framing: framings[0] ?? "fill",
+    style: existing?.captionStyle ?? captionStyles[0] ?? "word",
+    font: existing?.font ?? fonts[0] ?? "brat",
+    effect: existing?.effect ?? captionEffects[0] ?? "none",
+    look: existing?.look ?? looks[0] ?? "film",
+    framing: existing?.framing ?? framings[0] ?? "fill",
   });
   set({ recipes: [recipe, ...batch], selectedId: recipe.id, step: "edit" });
+}
+
+let dragRegionFrom: Region | null = null;
+let batchAbort: AbortController | null = null;
+
+function slugTrack(name: string) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "aftercut";
 }
 
 export const useStudio = create<StudioState>((set, get) => ({
@@ -436,11 +452,20 @@ export const useStudio = create<StudioState>((set, get) => ({
   setRegion: (next, opts) => {
     const analysis = get().analysis;
     const region = analysis ? clampRegion(next, analysis.duration) : next;
-    const last = get().lastTranscribedRegion;
-    const moved = !regionClose(last, region);
-    if (!opts?.preview) remember("region", sliceOf(get()));
-    const movedNotice = moved && last && get().words.length;
-    const recipes = analysis ? get().recipes.map((recipe) => retargetRecipe(recipe, region, analysis)) : get().recipes;
+    if (opts?.preview) {
+      if (!dragRegionFrom) dragRegionFrom = get().region;
+      set({ region });
+      return;
+    }
+    const from = dragRegionFrom ?? get().region;
+    dragRegionFrom = null;
+    remember("region", sliceOf(get()));
+    const moved = !regionClose(get().lastTranscribedRegion, region);
+    const movedNotice = moved && get().lastTranscribedRegion && get().words.length;
+    const same =
+      Math.abs(from.start - region.start) < 0.001 && Math.abs(from.end - region.end) < 0.001;
+    const recipes =
+      analysis && !same ? get().recipes.map((recipe) => followRegion(recipe, from, region, analysis)) : get().recipes;
     set({
       region,
       recipes,
@@ -855,6 +880,51 @@ export const useStudio = create<StudioState>((set, get) => ({
       selectedId: recipes[0]?.id ?? null,
     });
   },
+  cancelBatchExport: () => {
+    batchAbort?.abort();
+  },
+  exportBatch: async () => {
+    const state = get();
+    const recipes = state.recipes.filter((recipe) => recipe.id !== "single");
+    if (!state.audioUrl || !recipes.length || state.exporting) return;
+    const controller = new AbortController();
+    batchAbort = controller;
+    const clipsFor = (target: Recipe) => {
+      const extras = [...get().userClips, ...get().vaultClips];
+      const ids = [...new Set([...(target.clipIds ?? []), ...get().selectedClipIds])];
+      return resolveCutClips(ids, extras);
+    };
+    set({
+      exporting: true,
+      batchNote: null,
+      batchRows: recipes.map((item) => ({ id: item.id, label: `${item.index + 1}`, progress: 0 })),
+    });
+    try {
+      const blob = await exportRecipeBatch({
+        recipes,
+        clipsFor,
+        lyrics: state.lyrics,
+        audioUrl: state.audioUrl,
+        start: state.region.start,
+        end: state.region.end,
+        captionPrefs: state.captionPrefs,
+        signal: controller.signal,
+        onItem: (row) => {
+          set({
+            batchRows: get().batchRows.map((item) => (item.id === row.id ? row : item)),
+          });
+        },
+      });
+      downloadZip(blob, `${slugTrack(state.trackName)}-batch.zip`);
+      set({ batchNote: `Downloaded ${recipes.length} videos.` });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") set({ batchNote: "Export cancelled." });
+      else set({ batchNote: err instanceof Error ? err.message : "Export failed" });
+    } finally {
+      batchAbort = null;
+      set({ exporting: false });
+    }
+  },
   selectRecipe: (selectedId) => set({ selectedId, step: selectedId ? "edit" : "wall" }),
   updateSelected: (patch) => {
     const { recipes, selectedId } = get();
@@ -920,25 +990,26 @@ export const useStudio = create<StudioState>((set, get) => ({
   moveRecipeCut: (index, time) =>
     patchOpenRecipe(get, set, (recipe) => ({
       ...recipe,
+      cutsEdited: true,
       cuts: moveCutTime(recipe.cuts, index, time),
     })),
   moveRecipeSegment: (from, dropTime) =>
     patchOpenRecipe(get, set, (recipe) => {
       const clipIds = recipe.clipIds.length ? recipe.clipIds : fallbackClipIds(recipe, get().clips());
       const next = moveSegmentTo(recipe.cuts, clipIds, from, dropTime);
-      return next ? { ...recipe, ...next } : recipe;
+      return next ? { ...recipe, ...next, cutsEdited: true } : recipe;
     }),
   splitRecipeAt: (time) =>
     patchOpenRecipe(get, set, (recipe) => {
       const clipIds = recipe.clipIds.length ? recipe.clipIds : fallbackClipIds(recipe, get().clips());
       const next = splitCuts(recipe.cuts, clipIds, time);
-      return next ? { ...recipe, ...next } : recipe;
+      return next ? { ...recipe, ...next, cutsEdited: true } : recipe;
     }),
   removeRecipeCut: (index) =>
     patchOpenRecipe(get, set, (recipe) => {
       const clipIds = recipe.clipIds.length ? recipe.clipIds : fallbackClipIds(recipe, get().clips());
       const next = removeCutAt(recipe.cuts, clipIds, index);
-      return next ? { ...recipe, ...next } : recipe;
+      return next ? { ...recipe, ...next, cutsEdited: true } : recipe;
     }),
   clips: () => resolveCutClips(get().selectedClipIds, [...get().userClips, ...get().vaultClips]),
   selected: () => get().recipes.find((r) => r.id === get().selectedId) ?? null,

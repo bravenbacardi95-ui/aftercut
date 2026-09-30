@@ -119,6 +119,16 @@ function sizeMul(size: CaptionPrefs["size"]) {
   return size === "s" ? 0.82 : size === "l" ? 1.22 : 1;
 }
 
+function heldIndex(words: { start: number; end: number }[], t: number): number {
+  let held = -1;
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i]!;
+    if (t >= word.start && t < word.end) return i;
+    if (word.start <= t) held = i;
+  }
+  return held;
+}
+
 function fontFace(font: CaptionFontId): { family: string; weight: string; style: string; yScale: number; blur: number } {
   switch (font) {
     case "brat":
@@ -180,13 +190,10 @@ function drawCaption(
         end: line.start + ((i + 1) / arr.length) * (line.end - line.start),
         line: 0,
       }));
-  const current = words.reduce<LyricWord | null>((best, word) => {
-    if (t < word.start || t >= word.end) return best;
-    if (!best || word.start >= best.start) return word;
-    return best;
-  }, null);
-  if (!current) return;
-  const mul = sizeMul(prefs.size);
+  const idx = heldIndex(words, t);
+  if (idx < 0) return;
+  const current = words[idx]!;
+  const mul = sizeMul(prefs.size) * (quality === "preview" && w < 220 ? Math.min(2.6, 480 / w) : 1);
   const baseY = captionY(prefs.position, layout, h);
   const face = fontFace(font);
   const fill = font === "brat" ? "#8ACE00" : "#f2efe8";
@@ -198,9 +205,12 @@ function drawCaption(
   }
   let display = current.text.trim() || line.text;
   if (layout === "typewriter") {
-    const span = Math.max(0.05, current.end - current.start);
-    const p = Math.max(0, Math.min(1, (t - current.start) / span));
-    display = current.text.slice(0, Math.max(1, Math.ceil(current.text.length * p)));
+    if (t >= current.end) display = current.text;
+    else {
+      const span = Math.max(0.05, current.end - current.start);
+      const p = Math.max(0, Math.min(1, (t - current.start) / span));
+      display = current.text.slice(0, Math.max(1, Math.ceil(current.text.length * p)));
+    }
   }
   void quality;
   const painted = applyCase(display, font, prefs.textCase);
@@ -299,6 +309,7 @@ function drawPhrase(
     drawKaraoke(ctx, words, t, w, y, mul, prefs, font, quality, fill, effect === "outline");
     return;
   }
+  const held = heldIndex(words, t);
   const dim = font === "brat" ? "rgba(138,206,0,0.4)" : "rgba(242,239,232,0.42)";
   const fontPx = fitFont(ctx, phrase, maxW, Math.round(w * 0.072 * mul), font);
   ctx.font = fontCss(fontPx, font);
@@ -313,7 +324,7 @@ function drawPhrase(
   ctx.translate(0, y);
   ctx.scale(1, face.yScale);
   words.forEach((wd, i) => {
-    const current = t >= wd.start && t < wd.end;
+    const current = i === held;
     const label = labels[i] ?? "";
     ctx.lineJoin = "round";
     if (effect === "outline" || current) {
@@ -501,7 +512,12 @@ export function drawFrame(
     }
   }
 
-  const line = lyrics.find((entry) => entry.words.some((word) => time >= word.start && time < word.end)) ?? null;
+  const line =
+    lyrics.find((entry) => {
+      const words = entry.words;
+      if (words.length) return time >= words[0]!.start && time < words[words.length - 1]!.end;
+      return time >= entry.start && time < entry.end;
+    }) ?? null;
   if (line) {
     drawCaption(
       ctx,

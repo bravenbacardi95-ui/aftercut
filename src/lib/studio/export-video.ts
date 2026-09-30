@@ -49,7 +49,7 @@ export async function exportRecipe(opts: {
   const mime = pickMime();
   const recorder = new MediaRecorder(combined, {
     mimeType: mime,
-    videoBitsPerSecond: 12_000_000,
+    videoBitsPerSecond: 6_000_000,
     audioBitsPerSecond: 192_000,
   });
   const chunks: BlobPart[] = [];
@@ -126,6 +126,10 @@ export async function exportRecipe(opts: {
       })();
     });
   } finally {
+    videoTrack.stop();
+    for (const track of stream.getTracks()) track.stop();
+    for (const track of combined.getTracks()) track.stop();
+    for (const track of dest.stream.getTracks()) track.stop();
     await armExportClip(null, 0);
     setPackVideoPlaying(false);
     await audioCtx.close().catch(() => undefined);

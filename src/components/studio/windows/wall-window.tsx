@@ -1,12 +1,9 @@
-import { useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PhonePreview, RecipeThumb, Transport, usePreviewRecipe } from "@/components/studio/studio-ui";
 import { SplitPane } from "@/components/studio/split-pane";
-import { downloadZip, exportRecipeBatch, type BatchExportRow } from "@/lib/studio/export-batch";
 import { useStudioLayout } from "@/lib/studio/layout";
-import { resolveCutClips } from "@/lib/studio/packs";
 import { uniqueRecipeCount } from "@/lib/studio/recipes";
 import { useStudio } from "@/lib/studio/store";
 import type { Recipe } from "@/lib/studio/types";
@@ -32,64 +29,17 @@ export function WallWindow() {
   const previewW = useStudioLayout((s) => s.previewW);
   const setPreviewW = useStudioLayout((s) => s.setPreviewW);
   const audioUrl = useStudio((s) => s.audioUrl);
-  const lyrics = useStudio((s) => s.lyrics);
-  const region = useStudio((s) => s.region);
-  const captionPrefs = useStudio((s) => s.captionPrefs);
-  const selectedClipIds = useStudio((s) => s.selectedClipIds);
-  const userClips = useStudio((s) => s.userClips);
-  const vaultClips = useStudio((s) => s.vaultClips);
-  const trackName = useStudio((s) => s.trackName);
-  const generating = useStudio((s) => s.generating);
-  const [rows, setRows] = useState<BatchExportRow[]>([]);
-  const [note, setNote] = useState<string | null>(null);
-  const cancelRef = useRef<AbortController | null>(null);
+  const exporting = useStudio((s) => s.exporting);
+  const batchRows = useStudio((s) => s.batchRows);
+  const batchNote = useStudio((s) => s.batchNote);
+  const exportBatch = useStudio((s) => s.exportBatch);
+  const cancelBatchExport = useStudio((s) => s.cancelBatchExport);
+  const batching = exporting && batchRows.length > 0;
   const unique = uniqueRecipeCount(recipes);
 
   const open = (id: string) => {
     selectRecipe(id);
     void navigate({ href: "/studio/editor" });
-  };
-
-  const clipsFor = (target: Recipe) => {
-    const extras = [...userClips, ...vaultClips];
-    const ids = [...new Set([...(target.clipIds ?? []), ...selectedClipIds])];
-    return resolveCutClips(ids, extras);
-  };
-
-  const exportBatch = async () => {
-    if (!audioUrl || !recipes.length || generating) return;
-    const controller = new AbortController();
-    cancelRef.current = controller;
-    setRows(recipes.map((item) => ({ id: item.id, label: `${item.index + 1}`, progress: 0 })));
-    setNote(null);
-    useStudio.setState({ generating: true });
-    try {
-      const blob = await exportRecipeBatch({
-        recipes,
-        clipsFor,
-        lyrics,
-        audioUrl,
-        start: region.start,
-        end: region.end,
-        captionPrefs,
-        signal: controller.signal,
-        onItem: (row) => {
-          setRows((prev) => {
-            const next = prev.filter((item) => item.id !== row.id);
-            next.push(row);
-            return next;
-          });
-        },
-      });
-      downloadZip(blob, `${slug(trackName)}-batch.zip`);
-      setNote(`Downloaded ${recipes.length} videos.`);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") setNote("Export cancelled.");
-      else setNote(err instanceof Error ? err.message : "Export failed");
-    } finally {
-      cancelRef.current = null;
-      useStudio.setState({ generating: false });
-    }
   };
 
   return (
@@ -139,26 +89,28 @@ export function WallWindow() {
         </div>
         {recipes.length ? (
           <div className="flex flex-col gap-2">
-            <Button type="button" onClick={() => void exportBatch()} disabled={generating || !audioUrl}>
-              {generating ? "Exporting batch…" : "Export batch"}
+            <Button type="button" onClick={() => void exportBatch()} disabled={exporting || !audioUrl}>
+              {batching ? "Exporting batch…" : "Export batch"}
             </Button>
-            {generating ? (
-              <Button type="button" variant="secondary" onClick={() => cancelRef.current?.abort()}>
+            {batching ? (
+              <Button type="button" variant="secondary" onClick={() => cancelBatchExport()}>
                 Cancel
               </Button>
             ) : null}
-            {rows
-              .filter((row) => row.progress < 1)
-              .slice(-2)
-              .map((row) => (
-                <div key={row.id}>
-                  <p className="truncate text-xs text-muted">{row.label}</p>
-                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-elevated">
-                    <div className="h-full bg-accent" style={{ width: `${Math.round(row.progress * 100)}%` }} />
-                  </div>
-                </div>
-              ))}
-            {note ? <p className="text-xs text-muted">{note}</p> : null}
+            {batching
+              ? batchRows
+                  .filter((row) => row.progress < 1)
+                  .slice(-2)
+                  .map((row) => (
+                    <div key={row.id}>
+                      <p className="truncate text-xs text-muted">{row.label}</p>
+                      <div className="mt-1 h-1 overflow-hidden rounded-full bg-elevated">
+                        <div className="h-full bg-accent" style={{ width: `${Math.round(row.progress * 100)}%` }} />
+                      </div>
+                    </div>
+                  ))
+              : null}
+            {!exporting && batchNote ? <p className="text-xs text-muted">{batchNote}</p> : null}
           </div>
         ) : null}
         {selectedId ? (
@@ -173,8 +125,4 @@ export function WallWindow() {
       </aside>
     </SplitPane>
   );
-}
-
-function slug(name: string) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "aftercut";
 }
