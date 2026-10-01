@@ -26,7 +26,7 @@ let importsOkAt = 0;
 function pythonCanHear(bin: string): Promise<boolean> {
   if (importsOkAt && Date.now() - importsOkAt < 20_000) return Promise.resolve(true);
   return new Promise((resolve) => {
-    const child = spawn(bin, ["-c", "import torch, faster_whisper"], { stdio: "ignore" });
+    const child = spawn(bin, ["-c", "import torch, torchaudio, faster_whisper"], { stdio: "ignore" });
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
       resolve(false);

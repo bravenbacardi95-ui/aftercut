@@ -202,8 +202,9 @@ function scorePlacement(words: { start: number; end: number }[], region: Region)
 export function commitWords(words: LyricWord[], mode: "heard" | "authored" = "heard") {
   const sorted = [...words].sort((a, b) => a.start - b.start || a.line - b.line);
   const lyrics = mode === "authored" ? groupByAuthoredLine(sorted) : groupWordsIntoLines(sorted);
+  const flat = lyrics.flatMap((line) => line.words);
   return {
-    words: mode === "authored" ? lyrics.flatMap((line) => line.words) : sorted,
+    words: flat,
     lyrics,
     lyricDraft: lyrics.map((line) => line.text).join("\n"),
   };

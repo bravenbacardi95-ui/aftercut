@@ -1,5 +1,5 @@
 import { drawFrame, ensureCaptionFonts } from "./compositor";
-import { armExportClip, awaitVideoFrame, getImage, getVideo, setPackVideoPlaying } from "./media";
+import { holdExportFrame, getImage, getVideo, setPackVideoPlaying } from "./media";
 import { clipForRecipe, segmentIndexAt } from "./recipes";
 import { DEFAULT_CAPTION_PREFS, type CaptionPrefs, type LyricLine, type MediaClip, type Recipe } from "./types";
 
@@ -42,9 +42,11 @@ export async function exportRecipe(opts: {
 
   const duration = Math.max(0.5, slice.duration);
   const frames = Math.max(1, Math.round(duration * fps));
-  const stream = canvas.captureStream(0);
+  const frameUs = Math.round(1_000_000 / fps);
+  const timed = openTimedTracks();
+  const stream = timed ? new MediaStream([timed.video, timed.audio]) : canvas.captureStream(0);
   const videoTrack = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void };
-  const combined = new MediaStream([videoTrack, ...dest.stream.getAudioTracks()]);
+  const combined = new MediaStream([videoTrack, ...(timed ? [timed.audio] : dest.stream.getAudioTracks())]);
 
   const mime = pickMime();
   const recorder = new MediaRecorder(combined, {
@@ -68,29 +70,19 @@ export async function exportRecipe(opts: {
       recorder.onstop = () => resolve();
       recorder.onerror = () => reject(new Error("Export failed"));
       recorder.start(200);
-      bufferSource.start();
-      const started = performance.now();
-      let lastSrc: string | null = null;
+      if (!timed) bufferSource.start();
       void (async () => {
         try {
           for (let i = 0; i < frames; i++) {
             if (opts.signal?.aborted) throw new DOMException("Export cancelled", "AbortError");
             const t = opts.start + i / fps;
             const clip = clipForRecipe(opts.recipe, opts.clips, t);
-            const src = clip?.kind === "video" ? clip.src : null;
-            if (src !== lastSrc) {
-              if (src) {
-                const seg = segmentIndexAt(opts.recipe.cuts ?? [opts.start, opts.end], t);
-                const local = Math.max(0, t - (opts.recipe.cuts?.[seg] ?? opts.start));
-                await armExportClip(src, local);
-                await awaitVideoFrame(getVideo(src), 80);
-              } else {
-                await armExportClip(null, 0);
-              }
-              lastSrc = src;
-            } else if (src) {
-              const video = getVideo(src);
-              if (video.paused) void video.play().catch(() => undefined);
+            if (clip?.kind === "video") {
+              const seg = segmentIndexAt(opts.recipe.cuts ?? [opts.start, opts.end], t);
+              const local = Math.max(0, t - (opts.recipe.cuts?.[seg] ?? opts.start));
+              await holdExportFrame(clip.src, local);
+            } else {
+              await holdExportFrame(null, 0);
             }
             drawFrame(ctx, {
               recipe: opts.recipe,
@@ -102,13 +94,26 @@ export async function exportRecipe(opts: {
               captionPrefs,
               quality: "export",
             });
-            videoTrack.requestFrame?.();
+            if (timed) {
+              const ts = Math.round((i * 1_000_000) / fps);
+              const frame = new VideoFrame(canvas, { timestamp: ts, duration: frameUs });
+              try {
+                await timed.videoWriter.write(frame);
+              } finally {
+                frame.close();
+              }
+              await writeAudioWindow(timed.audioWriter, slice, i, frames, fps);
+            } else {
+              videoTrack.requestFrame?.();
+            }
             opts.onProgress?.(Math.min(1, (i + 1) / frames));
-            const target = started + ((i + 1) * 1000) / fps;
-            const wait = target - performance.now();
-            if (wait > 0) await sleep(wait);
+            await sleep(0);
           }
-          bufferSource.stop();
+          try {
+            bufferSource.stop();
+          } catch {
+            /* timed exports never start the live source */
+          }
           await sleep(120);
           if (recorder.state !== "inactive") recorder.stop();
         } catch (err) {
@@ -126,11 +131,13 @@ export async function exportRecipe(opts: {
       })();
     });
   } finally {
+    await timed?.videoWriter.close().catch(() => undefined);
+    await timed?.audioWriter.close().catch(() => undefined);
     videoTrack.stop();
     for (const track of stream.getTracks()) track.stop();
     for (const track of combined.getTracks()) track.stop();
     for (const track of dest.stream.getTracks()) track.stop();
-    await armExportClip(null, 0);
+    await holdExportFrame(null, 0);
     setPackVideoPlaying(false);
     await audioCtx.close().catch(() => undefined);
   }
@@ -141,6 +148,68 @@ export async function exportRecipe(opts: {
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+type TimedTracks = {
+  video: MediaStreamTrack;
+  audio: MediaStreamTrack;
+  videoWriter: WritableStreamDefaultWriter<VideoFrame>;
+  audioWriter: WritableStreamDefaultWriter<AudioData>;
+};
+
+function openTimedTracks(): TimedTracks | null {
+  const Ctor = (
+    globalThis as unknown as {
+      MediaStreamTrackGenerator?: new (init: { kind: "video" | "audio" }) => MediaStreamTrack & { writable: WritableStream<unknown> };
+    }
+  ).MediaStreamTrackGenerator;
+  if (typeof Ctor !== "function" || typeof VideoFrame === "undefined" || typeof AudioData === "undefined") return null;
+  let video: (MediaStreamTrack & { writable: WritableStream<unknown> }) | null = null;
+  let audio: (MediaStreamTrack & { writable: WritableStream<unknown> }) | null = null;
+  try {
+    video = new Ctor({ kind: "video" });
+    audio = new Ctor({ kind: "audio" });
+    return {
+      video,
+      audio,
+      videoWriter: video.writable.getWriter() as WritableStreamDefaultWriter<VideoFrame>,
+      audioWriter: audio.writable.getWriter() as WritableStreamDefaultWriter<AudioData>,
+    };
+  } catch {
+    video?.stop();
+    audio?.stop();
+    return null;
+  }
+}
+
+async function writeAudioWindow(
+  writer: WritableStreamDefaultWriter<AudioData>,
+  buffer: AudioBuffer,
+  frameIndex: number,
+  frameCount: number,
+  fps: number,
+) {
+  const sr = buffer.sampleRate;
+  const start = Math.round((frameIndex * sr) / fps);
+  const end = frameIndex === frameCount - 1 ? buffer.length : Math.min(buffer.length, Math.round(((frameIndex + 1) * sr) / fps));
+  const count = end - start;
+  if (count <= 0) return;
+  const channels = buffer.numberOfChannels;
+  const data = new Float32Array(count * channels);
+  for (let c = 0; c < channels; c++) data.set(buffer.getChannelData(c).subarray(start, end), c * count);
+  const audio = new AudioData({
+    format: "f32-planar",
+    sampleRate: sr,
+    numberOfFrames: count,
+    numberOfChannels: channels,
+    timestamp: Math.round((start * 1_000_000) / sr),
+    data,
+  });
+  try {
+    await writer.write(audio);
+  } finally {
+    audio.close();
+  }
 }
 
 function throwIfAborted(signal?: AbortSignal) {

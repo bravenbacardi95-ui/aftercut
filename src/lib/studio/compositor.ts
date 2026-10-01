@@ -211,7 +211,7 @@ function bratTokens(lyrics: LyricLine[]): BratTok[] {
   return out;
 }
 
-/** Phrase blocks: break on line ends, pauses ≥ 400ms, or 12 words. */
+/** Phrase blocks: break on line ends, pauses ≥ 600ms, or 12 words. */
 function groupBratBlocks(tokens: BratTok[]): BratTok[][] {
   const blocks: BratTok[][] = [];
   let cur: BratTok[] = [];
@@ -221,7 +221,7 @@ function groupBratBlocks(tokens: BratTok[]): BratTok[][] {
   };
   for (const word of tokens) {
     const prev = cur[cur.length - 1];
-    if (prev && (word.key !== prev.key || word.start - prev.end >= 0.4 || cur.length >= 12)) flush();
+    if (prev && (word.key !== prev.key || word.start - prev.end >= 0.6 || cur.length >= 12)) flush();
     cur.push(word);
   }
   flush();
@@ -266,25 +266,44 @@ function yOrigin(position: CaptionPosId, frameH: number, blockH: number, lh: num
   return Math.max(lh * 0.35, Math.min(frameH * 0.92 - blockH + lh / 2, frameH - lh * 0.4));
 }
 
+type BratLaid = {
+  px: number;
+  gap: number;
+  widths: number[];
+  rows: number[][];
+  naturals: number[];
+  lh: number;
+  target: number;
+};
+
+const bratLayoutCache = new Map<string, BratLaid>();
+let bratBlockCache: { lyrics: LyricLine[]; blocks: BratTok[][] } | null = null;
+
+function bratBlocks(lyrics: LyricLine[]) {
+  if (bratBlockCache?.lyrics === lyrics) return bratBlockCache.blocks;
+  const blocks = groupBratBlocks(bratTokens(lyrics));
+  bratBlockCache = { lyrics, blocks };
+  return blocks;
+}
+
 function chooseBrat(
   ctx: CanvasRenderingContext2D,
   labels: string[],
   plateW: number,
+  frameW: number,
   frameH: number,
-  rowTarget?: number,
+  rowTarget: number | undefined,
+  size: number,
 ) {
-  const target = plateW * 0.85;
-  const maxPx = Math.max(20, Math.round(plateW * 0.22));
-  const minPx = Math.max(12, Math.round(plateW * 0.03));
-  let best: {
-    score: number;
-    px: number;
-    gap: number;
-    widths: number[];
-    rows: number[][];
-    naturals: number[];
-    lh: number;
-  } | null = null;
+  const key = `${Math.round(plateW)}|${Math.round(frameW)}|${Math.round(frameH)}|${rowTarget ?? ""}|${size}|${labels.join("\n")}`;
+  const cached = bratLayoutCache.get(key);
+  if (cached) return cached;
+  const short = labels.length <= 4;
+  const wide = frameW / Math.max(1, frameH) >= 1.45;
+  const target = wide ? Math.min(plateW * 0.85, frameH * 0.7) : plateW * 0.85;
+  const maxPx = Math.max(20, Math.round(plateW * (short ? 0.4 : 0.2) * size));
+  const minPx = Math.max(10, Math.round(plateW * 0.028 * Math.min(1, size)));
+  let best: (BratLaid & { score: number }) | null = null;
   for (let px = maxPx; px >= minPx; px -= 2) {
     ctx.font = fontCss(px, "brat");
     const gap = Math.max(ctx.measureText(" ").width, px * 0.18) * BRAT_SX;
@@ -300,16 +319,22 @@ function chooseBrat(
     const fill = longest / Math.max(1, target);
     let score = Math.abs(fill - 1);
     if (longest > target * 1.04) score += (longest / target - 1) * 5;
-    if (labels.length >= 3) {
-      if (rowCount < 3) score += (3 - rowCount) * 0.5;
-      if (rowCount > 5) score += (rowCount - 5) * 1;
-      if (rowTarget) score += Math.abs(rowCount - rowTarget) * 0.25;
+    const wantRows = labels.length > 4 || wide;
+    if (wantRows && labels.length >= 3) {
+      if (rowCount < 3) score += (3 - rowCount) * 0.9;
+      if (rowCount > 5) score += (rowCount - 5) * 1.2;
+      if (!short && rowTarget) score += Math.abs(rowCount - rowTarget) * 0.35;
+    } else if (short) {
+      score += Math.max(0, rowCount - 2) * 0.35;
     }
     if (rowCount * lh > frameH * 0.7) score += 2;
-    score -= px / 8000;
-    if (!best || score < best.score) best = { score, px, gap, widths, rows, naturals, lh };
+    score -= px / (short ? 1800 : 5000);
+    if (!best || score < best.score) best = { score, px, gap, widths, rows, naturals, lh, target };
   }
-  return best!;
+  const laid = best!;
+  if (bratLayoutCache.size > 48) bratLayoutCache.clear();
+  bratLayoutCache.set(key, laid);
+  return laid;
 }
 
 function drawBrat(
@@ -321,7 +346,7 @@ function drawBrat(
   prefs: CaptionPrefs,
   look?: { mode?: BratPlateMode; plate?: BratPlateId; position?: CaptionPosId; rows?: number },
 ) {
-  const blocks = groupBratBlocks(bratTokens(lyrics));
+  const blocks = bratBlocks(lyrics);
   let active: BratTok[] | null = null;
   let began = 0;
   let until = 0;
@@ -342,11 +367,11 @@ function drawBrat(
 
   const mode = look?.mode ?? prefs.bratPlateMode ?? "full";
   const plate = look?.plate ?? prefs.bratPlate;
-  const position = look?.position ?? "mid";
+  const position = look?.position ?? prefs.position ?? "mid";
   const labels = active.map((word) => word.text);
   const plateW = mode === "block" ? w * 0.78 : w;
-  const laid = chooseBrat(ctx, labels, plateW, h, look?.rows);
-  const target = plateW * 0.85;
+  const laid = chooseBrat(ctx, labels, plateW, w, h, look?.rows, sizeMul(prefs.size));
+  const target = laid.target;
   const left = (w - target) / 2;
   const blockH = laid.rows.length * laid.lh;
   const y0 = yOrigin(position, h, blockH, laid.lh);
@@ -354,8 +379,15 @@ function drawBrat(
   laid.rows.forEach((row, ri) => {
     const sum = row.reduce((acc, i) => acc + (laid.widths[i] ?? 0), 0);
     const natural = laid.naturals[ri] ?? sum;
-    const justify = row.length > 1 && natural >= target * 0.8 && natural <= target * 1.02;
-    const useGap = justify ? (target - sum) / Math.max(1, row.length - 1) : laid.gap;
+    const gaps = Math.max(1, row.length - 1);
+    const stretched = row.length > 1 ? (target - sum) / gaps : laid.gap;
+    const justify =
+      row.length > 1 &&
+      stretched > 0 &&
+      stretched <= laid.gap * 1.6 &&
+      natural >= target * 0.8 &&
+      natural <= target * 1.02;
+    const useGap = justify ? stretched : laid.gap;
     let x = left;
     for (const i of row) {
       spots.push({ label: labels[i] ?? "", start: active![i]!.start, x, y: y0 + ri * laid.lh });
@@ -750,7 +782,7 @@ export function drawFrame(
     drawBrat(ctx, lyrics, time, width, height, prefs, {
       mode: bratMode,
       plate: bratPlate,
-      position: recipe.bratPosition ?? "mid",
+      position: recipe.bratPosition ?? prefs.position,
       rows: recipe.bratRows,
     });
   } else {

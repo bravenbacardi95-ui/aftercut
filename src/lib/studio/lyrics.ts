@@ -38,19 +38,19 @@ export function groupByAuthoredLine(words: LyricWord[]): LyricLine[] {
   });
 }
 
-export function groupWordsIntoLines(words: LyricWord[], gap = 0.32): LyricLine[] {
+function shownWord(text: string) {
+  const stripped = text.replace(/[.,!?;:…]+$/g, "");
+  return stripped.length ? stripped : text;
+}
+
+export function groupWordsIntoLines(words: LyricWord[], gap = 0.6): LyricLine[] {
   if (!words.length) return [];
   const sorted = [...words].sort((a, b) => a.start - b.start || a.end - b.end);
   const groups: LyricWord[][] = [];
   let cur: LyricWord[] = [];
   for (const word of sorted) {
     const prev = cur[cur.length - 1];
-    const newLine =
-      !prev ||
-      word.line !== prev.line ||
-      word.start - prev.end >= gap ||
-      cur.length >= 7 ||
-      /[.!?]$/.test(prev.text);
+    const newLine = !prev || word.line !== prev.line || word.start - prev.end >= gap || cur.length >= 8;
     if (newLine && cur.length) {
       groups.push(cur);
       cur = [word];
@@ -63,7 +63,7 @@ export function groupWordsIntoLines(words: LyricWord[], gap = 0.32): LyricLine[]
   return groups.map((group, i) => {
     const start = group[0].start;
     const end = group[group.length - 1].end;
-    const tagged = group.map((w) => ({ ...w, line: i }));
+    const tagged = group.map((w) => ({ ...w, text: shownWord(w.text), line: i }));
     return {
       id: `ln-${i}-${tagged[0].id}`,
       text: tagged.map((w) => w.text).join(" "),
@@ -79,7 +79,7 @@ export function linesToDraft(lines: LyricLine[]): string {
 }
 
 export function wordsToDraft(words: LyricWord[]): string {
-  return linesToDraft(groupWordsIntoLines(words));
+  return linesToDraft(groupByAuthoredLine(words));
 }
 
 export function explodeLine(text: string, start: number, end: number, line: number): LyricWord[] {
@@ -230,7 +230,7 @@ export function activeWord(words: LyricWord[], t: number): LyricWord | null {
 export function applyDraft(oldWords: LyricWord[], text: string, region: Region): LyricWord[] {
   const newLines = parseLyricText(text).map(tokenizeLine).filter((l) => l.length);
   if (!newLines.length) return [];
-  const oldLines = groupWordsIntoLines(oldWords);
+  const oldLines = groupByAuthoredLine(oldWords);
   const result: LyricWord[] = [];
 
   newLines.forEach((tokens, i) => {

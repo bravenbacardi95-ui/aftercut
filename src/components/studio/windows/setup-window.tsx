@@ -142,6 +142,7 @@ function VocalIsolate() {
   const region = useStudio((s) => s.region);
   const audioUrl = useStudio((s) => s.audioUrl);
   const transcribing = useStudio((s) => s.transcribing);
+  const speechEngine = useStudio((s) => s.speechEngine);
   const [note, setNote] = useState<string | null>(null);
   const [noteError, setNoteError] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -213,7 +214,7 @@ function VocalIsolate() {
           aria-pressed={playing}
           aria-busy={busy}
           onClick={() => void solo()}
-          disabled={busy || transcribing}
+          disabled={busy || transcribing || speechEngine === "down"}
         >
           {busy ? <LoaderCircle className="size-4 animate-spin" /> : null}
           {busy ? "Isolating…" : playing ? "Playing vocal" : "Solo vocal"}

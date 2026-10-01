@@ -146,7 +146,7 @@ type StudioState = {
   makeSingle: () => void;
   generate: () => void;
   selectRecipe: (id: string | null) => void;
-  updateSelected: (patch: Partial<Pick<Recipe, "captionStyle" | "font" | "effect" | "look" | "framing" | "bratPlate" | "bratPlateMode">>) => void;
+  updateSelected: (patch: Partial<Pick<Recipe, "captionStyle" | "font" | "effect" | "look" | "framing" | "bratPlate" | "bratPlateMode" | "bratPosition">>) => void;
   saveLyricVersion: (name: string) => void;
   loadLyricVersion: (id: string) => void;
   deleteLyricVersion: (id: string) => void;
@@ -407,7 +407,7 @@ export const useStudio = create<StudioState>((set, get) => ({
           audioUrl: url,
           analysis,
           region: restored,
-          ...commitWords(saved.words.map((word) => ({ ...word }))),
+          ...commitWords(saved.words.map((word) => ({ ...word })), "authored"),
           step: "setup",
           transcribing: false,
           transcribeStatus: "",
@@ -492,7 +492,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     if (lyricDraft.trim() === committed.trim()) return;
     remember("lyrics", sliceOf(get()));
     set({
-      ...commitWords(applyDraft(words, lyricDraft, region)),
+      ...commitWords(applyDraft(words, lyricDraft, region), "authored"),
       lyricsDirty: true,
       transcribeSource: "manual",
       notice: null,
@@ -684,43 +684,43 @@ export const useStudio = create<StudioState>((set, get) => ({
   selectWord: (selectedWordId) => set({ selectedWordId }),
   updateWordText: (id, text) => {
     remember(`text:${id}`, sliceOf(get()));
-    set({ ...commitWords(setWordText(get().words, id, text)), lyricsDirty: true, selectedWordId: id });
+    set({ ...commitWords(setWordText(get().words, id, text), "authored"), lyricsDirty: true, selectedWordId: id });
     touchSavedLyrics(get, set);
   },
   resizeWordEdge: (id, edge, time) => {
     const t = get().snapEnabled ? snapTime(time, snapPoints(get().analysis)) : time;
-    set({ ...commitWords(resizeWord(get().words, id, edge, t, true)), lyricsDirty: true, selectedWordId: id });
+    set({ ...commitWords(resizeWord(get().words, id, edge, t, true), "authored"), lyricsDirty: true, selectedWordId: id });
     queueTouch(get, set);
   },
   moveWordTo: (id, t) => {
     const time = get().snapEnabled ? snapTime(t, snapPoints(get().analysis)) : t;
-    set({ ...commitWords(moveWord(get().words, id, time, false)), lyricsDirty: true, selectedWordId: id });
+    set({ ...commitWords(moveWord(get().words, id, time, false), "authored"), lyricsDirty: true, selectedWordId: id });
     queueTouch(get, set);
   },
   deleteWord: (id) => {
     const next = removeWord(get().words, id);
     remember("delete", sliceOf(get()));
-    set({ ...commitWords(next), lyricsDirty: true, selectedWordId: null });
+    set({ ...commitWords(next, "authored"), lyricsDirty: true, selectedWordId: null });
     touchSavedLyrics(get, set);
   },
   addWordAt: (time, text) => {
     const next = insertWord(get().words, time, text);
     const added = next.find((w) => !get().words.some((o) => o.id === w.id));
     remember("add", sliceOf(get()));
-    set({ ...commitWords(next), lyricsDirty: true, selectedWordId: added?.id ?? get().selectedWordId });
+    set({ ...commitWords(next, "authored"), lyricsDirty: true, selectedWordId: added?.id ?? get().selectedWordId });
     touchSavedLyrics(get, set);
   },
   insertAfterWord: (id, text) => {
     const { words, createdId } = insertAfter(get().words, id, text);
     remember("insert", sliceOf(get()));
-    set({ ...commitWords(words), lyricsDirty: true, selectedWordId: createdId });
+    set({ ...commitWords(words, "authored"), lyricsDirty: true, selectedWordId: createdId });
     touchSavedLyrics(get, set);
   },
   nudgeSelected: (delta, edge = "both") => {
     const id = get().selectedWordId;
     if (!id) return;
     remember("nudge", sliceOf(get()));
-    set({ ...commitWords(nudgeWord(get().words, id, delta, edge)), lyricsDirty: true });
+    set({ ...commitWords(nudgeWord(get().words, id, delta, edge), "authored"), lyricsDirty: true });
     touchSavedLyrics(get, set);
   },
   setSnapEnabled: (snapEnabled) => set({ snapEnabled }),
@@ -1000,7 +1000,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     const duration = get().analysis?.duration;
     const region = duration ? clampRegion(version.region, duration) : { ...version.region };
     set({
-      ...commitWords(version.words.map((w) => ({ ...w }))),
+      ...commitWords(version.words.map((w) => ({ ...w })), "authored"),
       lyricDraft: version.lyricDraft,
       region,
       lyricsDirty: false,

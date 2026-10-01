@@ -189,6 +189,7 @@ function StyleInspector({
     framing: string;
     bratPlate?: "white" | "green" | "black";
     bratPlateMode?: "full" | "block";
+    bratPosition?: "top" | "mid" | "low";
   } | null;
   captionPrefs: CaptionPrefs;
   setCaptionPrefs: (patch: Partial<CaptionPrefs>) => void;
@@ -196,7 +197,7 @@ function StyleInspector({
   progress: number;
   message: string | null;
   onExport: () => void;
-  onChange: (patch: Partial<{ font: "brat" | "clean" | "editorial" | "poster"; captionStyle: "brat" | "word" | "line" | "karaoke" | "typewriter"; effect: "none" | "outline" | "boxed"; look: "clean" | "film" | "crush" | "cool" | "fade"; framing: "fill" | "offset" | "letterbox" | "punch"; bratPlate: "white" | "green" | "black"; bratPlateMode: "full" | "block" }>) => void;
+  onChange: (patch: Partial<{ font: "brat" | "clean" | "editorial" | "poster"; captionStyle: "brat" | "word" | "line" | "karaoke" | "typewriter"; effect: "none" | "outline" | "boxed"; look: "clean" | "film" | "crush" | "cool" | "fade"; framing: "fill" | "offset" | "letterbox" | "punch"; bratPlate: "white" | "green" | "black"; bratPlateMode: "full" | "block"; bratPosition: "top" | "mid" | "low" }>) => void;
 }) {
   const sizes: CaptionSizeId[] = ["s", "m", "l"];
   const positions: CaptionPosId[] = ["top", "mid", "low"];
@@ -204,6 +205,7 @@ function StyleInspector({
   const exporting = useStudio((s) => s.exporting);
   const plate = recipe?.bratPlate ?? captionPrefs.bratPlate;
   const plateMode = recipe?.bratPlateMode ?? captionPrefs.bratPlateMode ?? "full";
+  const position = recipe?.captionStyle === "brat" ? (recipe.bratPosition ?? captionPrefs.position) : captionPrefs.position;
   if (!recipe) return <p className="text-sm text-muted">Open a version from the wall to restyle it.</p>;
   return (
     <div className="flex flex-col gap-5">
@@ -300,7 +302,10 @@ function StyleInspector({
       </ChipGroup>
       <ChipGroup label="Position">
         {positions.map((id) => (
-          <Chip key={id} active={captionPrefs.position === id} onClick={() => setCaptionPrefs({ position: id })}>
+          <Chip key={id} active={position === id} onClick={() => {
+            setCaptionPrefs({ position: id });
+            if (recipe.captionStyle === "brat") onChange({ bratPosition: id });
+          }}>
             {captionPosLabel(id)}
           </Chip>
         ))}

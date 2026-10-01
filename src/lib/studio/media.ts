@@ -129,6 +129,27 @@ export function setPackVideoPlaying(on: boolean) {
   setActiveVideo(activeSrc, true);
 }
 
+export async function holdExportFrame(src: string | null, localTime: number) {
+  if (!src) {
+    activeSrc = null;
+    packVideosPlaying = false;
+    for (const el of videos.values()) {
+      if (!el.paused) el.pause();
+    }
+    return;
+  }
+  const el = getVideo(src);
+  const dur = Number.isFinite(el.duration) && el.duration > 0.25 ? el.duration : 0;
+  const at = dur ? ((localTime % dur) + dur) % dur : Math.max(0, localTime);
+  activeSrc = src;
+  packVideosPlaying = false;
+  for (const [key, video] of videos) {
+    if (key !== src && !video.paused) video.pause();
+  }
+  if (!el.paused) el.pause();
+  await seekVideo(el, at, 0.008);
+}
+
 export async function armExportClip(src: string | null, localTime: number) {
   if (!src) {
     activeSrc = null;
@@ -177,9 +198,9 @@ function wrappedDrift(current: number, target: number, dur: number) {
   return Math.min(drift, Math.abs(dur - drift));
 }
 
-function seekVideo(el: HTMLVideoElement, time: number) {
+function seekVideo(el: HTMLVideoElement, time: number, tolerance = 0.04) {
   return new Promise<void>((resolve) => {
-    if (el.readyState >= 1 && Math.abs(el.currentTime - time) < 0.04) {
+    if (el.readyState >= 1 && Math.abs(el.currentTime - time) < tolerance) {
       resolve();
       return;
     }
