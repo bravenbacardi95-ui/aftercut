@@ -24,8 +24,9 @@ function About() {
           <p>
             Drop a track, set the snippet, then paste the lyrics or press Transcribe. Cloud speech-to-text runs on the
             isolated vocal; if that service is down, the same stem is heard in the browser. Sample lyrics are never
-            filled in. Every word lands on a timeline you can stretch, rewrite, add, or delete. Brat, Clean, Editorial,
-            and Poster sit next to one-word, whole-line, karaoke, and typewriter captions. Beat detection, packs, and
+            filled in. Every word lands on a timeline you can stretch, rewrite, add, or delete. Brat is the default caption —
+            a justified lowercase block on white, with green and black plates — and Clean, Editorial, and Poster still sit
+            next to one-word, whole-line, karaoke, and typewriter. Beat detection, packs, and
             export still run in this browser — one video, or the whole wall as a zip.
           </p>
           <p>Built for everything after the music is made.</p>

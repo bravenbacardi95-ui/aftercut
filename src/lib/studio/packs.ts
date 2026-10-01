@@ -86,6 +86,7 @@ export function resolveCutClips(ids: string[], extras: MediaClip[] = []): MediaC
 }
 
 export const CAPTION_STYLES: { id: CaptionStyleId; name: string; sample: string }[] = [
+  { id: "brat", name: "Brat", sample: "Justified lowercase block" },
   { id: "word", name: "One word", sample: "Only the current word" },
   { id: "line", name: "Whole line", sample: "The full phrase" },
   { id: "karaoke", name: "Karaoke", sample: "Line, current word lit" },
@@ -99,7 +100,7 @@ export const CAPTION_EFFECTS: { id: CaptionEffectId; name: string; sample: strin
 ];
 
 export const CAPTION_FONTS: { id: CaptionFontId; name: string; sample: string }[] = [
-  { id: "brat", name: "Brat", sample: "Arial Narrow, lime, blur" },
+  { id: "brat", name: "Brat", sample: "Narrow, lowercase" },
   { id: "clean", name: "Clean", sample: "Outfit, tight sans" },
   { id: "editorial", name: "Editorial", sample: "Instrument Serif" },
   { id: "poster", name: "Poster", sample: "Anton, all caps" },

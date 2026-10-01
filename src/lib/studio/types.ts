@@ -1,4 +1,4 @@
-export type CaptionStyleId = "word" | "line" | "karaoke" | "typewriter";
+export type CaptionStyleId = "brat" | "word" | "line" | "karaoke" | "typewriter";
 export type CaptionEffectId = "none" | "outline" | "boxed";
 export type CaptionFontId = "brat" | "clean" | "editorial" | "poster";
 export type LookId = "clean" | "film" | "crush" | "cool" | "fade";
@@ -8,6 +8,7 @@ export type StudioStep = "track" | "setup" | "footage" | "vary" | "wall" | "edit
 export type CaptionSizeId = "s" | "m" | "l";
 export type CaptionPosId = "top" | "mid" | "low";
 export type CaptionCaseId = "as-is" | "upper";
+export type BratPlateId = "white" | "green" | "black";
 export type TranscribeSource = "stt" | "aligned" | "manual" | null;
 export type ClipOrigin = "stock" | "upload";
 export type FootageTab = "stock" | "upload";
@@ -34,6 +35,12 @@ export type CaptionPrefs = {
   size: CaptionSizeId;
   position: CaptionPosId;
   textCase: CaptionCaseId;
+  /** Flat field behind the Brat layout. Ignored by the other caption styles. */
+  bratPlate: BratPlateId;
+  /** When off, Brat covers the frame with the plate instead of the clip. */
+  bratFootage: boolean;
+  /** 80ms fade in and out between Brat blocks. Off by default. */
+  bratFade: boolean;
 };
 
 export type MediaClip = {
@@ -87,6 +94,9 @@ export const DEFAULT_CAPTION_PREFS: CaptionPrefs = {
   size: "m",
   position: "mid",
   textCase: "as-is",
+  bratPlate: "white",
+  bratFootage: false,
+  bratFade: false,
 };
 
 export const MIN_WORD_DUR = 0.04;

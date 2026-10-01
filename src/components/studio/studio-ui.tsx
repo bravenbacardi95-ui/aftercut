@@ -3,7 +3,7 @@ import { Pause, Play, SkipBack } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PlayerCanvas } from "@/components/studio/player-canvas";
 import { formatTime } from "@/lib/studio/beats";
-import { drawFrame, ensureCaptionFonts } from "@/lib/studio/compositor";
+import { bratSampleTime, drawFrame, ensureCaptionFonts } from "@/lib/studio/compositor";
 import { getImage } from "@/lib/studio/media";
 import { PACKS, resolveCutClips } from "@/lib/studio/packs";
 import { buildRecipes, buildSingleRecipe } from "@/lib/studio/recipes";
@@ -113,7 +113,7 @@ export function usePreviewRecipe(): Recipe | null {
       clipIds: selectedClipIds.length ? selectedClipIds : ["clip"],
       region,
       analysis,
-      style: captionStyles[0] ?? "word",
+      style: captionStyles[0] ?? "brat",
       font: fonts[0] ?? "brat",
       effect: captionEffects[0] ?? "none",
       look: looks[0] ?? "film",
@@ -266,6 +266,7 @@ export const RecipeThumb = memo(function RecipeThumb({ recipe }: { recipe: Recip
 function firstCaptionTime(recipe: Recipe, lyrics: LyricLine[]) {
   const start = recipe.cuts[0] ?? 0;
   const end = recipe.cuts[recipe.cuts.length - 1] ?? start + 1;
+  if (recipe.captionStyle === "brat") return bratSampleTime(lyrics, start, end);
   for (const line of lyrics) {
     for (const word of line.words) {
       if (word.end > start && word.start < end) return Math.max(start, word.start) + Math.min(0.08, Math.max(0.02, (word.end - word.start) * 0.35));

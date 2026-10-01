@@ -30,6 +30,8 @@ export function VaryWindow() {
   const selectedClipIds = useStudio((s) => s.selectedClipIds);
   const generate = useStudio((s) => s.generate);
   const generating = useStudio((s) => s.generating);
+  const captionPrefs = useStudio((s) => s.captionPrefs);
+  const setCaptionPrefs = useStudio((s) => s.setCaptionPrefs);
   const setStep = useStudio((s) => s.setStep);
   const navigate = useNavigate();
   const recipe = useLivePreview();
@@ -104,6 +106,39 @@ export function VaryWindow() {
               </Chip>
             ))}
           </ChipGroup>
+          {captionStyles.includes("brat") ? (
+            <>
+              <ChipGroup label="Brat plate">
+                {(
+                  [
+                    ["white", "White"],
+                    ["green", "Green"],
+                    ["black", "Black"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <Chip key={id} active={captionPrefs.bratPlate === id} onClick={() => setCaptionPrefs({ bratPlate: id })}>
+                    {label}
+                  </Chip>
+                ))}
+              </ChipGroup>
+              <ChipGroup label="Brat footage">
+                <Chip active={!captionPrefs.bratFootage} onClick={() => setCaptionPrefs({ bratFootage: false })}>
+                  Off
+                </Chip>
+                <Chip active={captionPrefs.bratFootage} onClick={() => setCaptionPrefs({ bratFootage: true })}>
+                  On
+                </Chip>
+              </ChipGroup>
+              <ChipGroup label="Brat fade">
+                <Chip active={!captionPrefs.bratFade} onClick={() => setCaptionPrefs({ bratFade: false })}>
+                  Off
+                </Chip>
+                <Chip active={captionPrefs.bratFade} onClick={() => setCaptionPrefs({ bratFade: true })}>
+                  80ms
+                </Chip>
+              </ChipGroup>
+            </>
+          ) : null}
           <ChipGroup label="Looks">
             {LOOKS.map((s) => (
               <Chip key={s.id} active={looks.includes(s.id)} onClick={() => toggleLook(s.id)}>

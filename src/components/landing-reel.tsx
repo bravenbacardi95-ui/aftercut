@@ -41,7 +41,7 @@ const REELS: {
   variant: "tiktok" | "reels";
   seed: number;
 }[] = [
-  { clip: "nd-tunnel", font: "brat", style: "line", look: "film", framing: "fill", variant: "tiktok", seed: 3 },
+  { clip: "nd-tunnel", font: "brat", style: "brat", look: "clean", framing: "fill", variant: "tiktok", seed: 3 },
   { clip: "gr-ocean", font: "editorial", style: "karaoke", look: "cool", framing: "letterbox", variant: "reels", seed: 8 },
   { clip: "ah-club", font: "poster", style: "word", look: "crush", framing: "punch", variant: "tiktok", seed: 14 },
   { clip: "gr-grass", font: "clean", style: "typewriter", look: "fade", framing: "offset", variant: "reels", seed: 21 },
@@ -117,7 +117,7 @@ export function LandingReel() {
         ))}
       </div>
       <p className="mt-3 px-4 text-xs uppercase tracking-[0.16em] text-subtle md:px-0">
-        Same compositor as the export — whole line, karaoke, type, and looks
+        Same compositor as the export — brat, whole line, karaoke, and looks
       </p>
     </div>
   );

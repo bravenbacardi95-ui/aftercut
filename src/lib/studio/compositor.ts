@@ -2,6 +2,7 @@ import { getImage, getVideo, drawCover } from "./media";
 import { clipForRecipe } from "./recipes";
 import { DEFAULT_CAPTION_PREFS } from "./types";
 import type {
+  BratPlateId,
   CaptionEffectId,
   CaptionFontId,
   CaptionPrefs,
@@ -133,11 +134,11 @@ function fontFace(font: CaptionFontId): { family: string; weight: string; style:
   switch (font) {
     case "brat":
       return {
-        family: '"Arial Narrow", "Brat Narrow", Arial, Helvetica, sans-serif',
+        family: '"Brat Narrow", "Arial Narrow", Arial, Helvetica, sans-serif',
         weight: "700",
         style: "normal",
-        yScale: 1.05,
-        blur: 1.6,
+        yScale: 1,
+        blur: 0,
       };
     case "editorial":
       return { family: '"Instrument Serif", Georgia, serif', weight: "600", style: "italic", yScale: 1, blur: 0 };
@@ -167,6 +168,182 @@ function fitFont(ctx: CanvasRenderingContext2D, text: string, maxW: number, star
     ctx.font = fontCss(px, font);
   }
   return px;
+}
+
+const BRAT_SX = 0.85;
+
+type BratTok = { text: string; start: number; end: number; key: string };
+
+function bratPlateColor(plate: BratPlateId) {
+  if (plate === "green") return "#8ACE00";
+  if (plate === "black") return "#000000";
+  return "#ffffff";
+}
+
+function bratInk(plate: BratPlateId) {
+  return plate === "black" ? "#8ACE00" : "#1a1a1a";
+}
+
+function bratTokens(lyrics: LyricLine[]): BratTok[] {
+  const out: BratTok[] = [];
+  for (const line of lyrics) {
+    const words = line.words.length
+      ? line.words
+      : line.text.split(/\s+/).filter(Boolean).map((wd, i, arr) => ({
+          text: wd,
+          start: line.start + (i / arr.length) * (line.end - line.start),
+          end: line.start + ((i + 1) / arr.length) * (line.end - line.start),
+        }));
+    for (const word of words) {
+      const text = word.text.trim().toLowerCase();
+      if (!text) continue;
+      out.push({
+        text,
+        start: word.start,
+        end: Math.max(word.end, word.start + 0.04),
+        key: line.id,
+      });
+    }
+  }
+  out.sort((a, b) => a.start - b.start || a.end - b.end);
+  return out;
+}
+
+/** Phrase blocks: break on line ends, pauses ≥ 400ms, or 12 words. */
+function groupBratBlocks(tokens: BratTok[]): BratTok[][] {
+  const blocks: BratTok[][] = [];
+  let cur: BratTok[] = [];
+  const flush = () => {
+    if (cur.length) blocks.push(cur);
+    cur = [];
+  };
+  for (const word of tokens) {
+    const prev = cur[cur.length - 1];
+    if (prev && (word.key !== prev.key || word.start - prev.end >= 0.4 || cur.length >= 12)) flush();
+    cur.push(word);
+  }
+  flush();
+  return blocks;
+}
+
+function wrapVisual(widths: number[], blockW: number, gap: number): number[][] {
+  const rows: number[][] = [];
+  let row: number[] = [];
+  let used = 0;
+  widths.forEach((width, i) => {
+    if (!row.length) {
+      row = [i];
+      used = width;
+      return;
+    }
+    if (used + gap + width > blockW + 0.5) {
+      rows.push(row);
+      row = [i];
+      used = width;
+    } else {
+      row.push(i);
+      used += gap + width;
+    }
+  });
+  if (row.length) rows.push(row);
+  return rows;
+}
+
+export function bratSampleTime(lyrics: LyricLine[], start: number, end: number) {
+  const blocks = groupBratBlocks(bratTokens(lyrics));
+  const block = blocks.find((item) => item[item.length - 1]!.end > start && item[0]!.start < end);
+  if (!block?.length) return start + 0.12;
+  const t = block[block.length - 1]!.start + 0.02;
+  return Math.min(Math.max(start, t), Math.max(start, end - 0.04));
+}
+
+function drawBrat(
+  ctx: CanvasRenderingContext2D,
+  lyrics: LyricLine[],
+  time: number,
+  w: number,
+  h: number,
+  prefs: CaptionPrefs,
+) {
+  const blocks = groupBratBlocks(bratTokens(lyrics));
+  let active: BratTok[] | null = null;
+  let began = 0;
+  let until = 0;
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i]!;
+    const start = block[0]!.start;
+    const end = block[block.length - 1]!.end;
+    const next = blocks[i + 1]?.[0]?.start;
+    const stop = next == null ? end : Math.min(end, next);
+    if (time >= start && time < stop) {
+      active = block;
+      began = start;
+      until = stop;
+      break;
+    }
+  }
+  if (!active?.length) return;
+
+  const labels = active.map((word) => word.text);
+  const blockW = w * 0.7;
+  const mul = sizeMul(prefs.size);
+  const maxPx = Math.round(w * 0.18 * mul);
+  const minPx = Math.max(10, Math.round(w * 0.038 * mul));
+  const longest = labels.reduce((best, label) => (label.length > best.length ? label : best), labels[0] ?? "");
+  let px = fitFont(ctx, longest, blockW / BRAT_SX, maxPx, "brat", minPx);
+  const layoutAt = (size: number) => {
+    ctx.font = fontCss(size, "brat");
+    const gap = Math.max(ctx.measureText(" ").width, size * 0.22) * BRAT_SX;
+    const widths = labels.map((label) => ctx.measureText(label).width * BRAT_SX);
+    return { gap, widths, rows: wrapVisual(widths, blockW, gap) };
+  };
+  let laid = layoutAt(px);
+  while (px > minPx && (laid.rows.length > 5 || laid.rows.length * px * 1.15 > h * 0.78)) {
+    px -= 2;
+    laid = layoutAt(px);
+  }
+  const { gap, widths, rows } = laid;
+  const lh = px * 1.15;
+  const y0 = (h - rows.length * lh) / 2 + lh / 2;
+  const left = (w - blockW) / 2;
+  const spots: { label: string; start: number; x: number; y: number }[] = [];
+  rows.forEach((row, ri) => {
+    const sum = row.reduce((acc, i) => acc + (widths[i] ?? 0), 0);
+    const packed = sum + gap * Math.max(0, row.length - 1);
+    const last = ri === rows.length - 1;
+    const justify = row.length > 1 && (!last || packed >= blockW * 0.7);
+    const useGap = justify ? (blockW - sum) / (row.length - 1) : gap;
+    let x = left;
+    for (const i of row) {
+      spots.push({ label: labels[i] ?? "", start: active![i]!.start, x, y: y0 + ri * lh });
+      x += (widths[i] ?? 0) + useGap;
+    }
+  });
+
+  let alpha = 1;
+  if (prefs.bratFade) {
+    const fade = 0.08;
+    if (time - began < fade) alpha = Math.max(0, (time - began) / fade);
+    if (until - time < fade) alpha = Math.min(alpha, Math.max(0, (until - time) / fade));
+  }
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.filter = `blur(${(1.2 * w) / 720}px)`;
+  ctx.fillStyle = bratInk(prefs.bratPlate);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.font = fontCss(px, "brat");
+  for (const spot of spots) {
+    if (time < spot.start) continue;
+    ctx.save();
+    ctx.translate(spot.x, spot.y);
+    ctx.scale(BRAT_SX, 1);
+    ctx.fillText(spot.label, 0, 0);
+    ctx.restore();
+  }
+  ctx.filter = "none";
+  ctx.restore();
 }
 
 function drawCaption(
@@ -430,13 +607,16 @@ export function drawFrame(
   const { recipe, clips, lyrics, time, width, height } = opts;
   const prefs = opts.captionPrefs ?? DEFAULT_CAPTION_PREFS;
   const quality = opts.quality ?? "export";
+  const bratPlateOnly = recipe.captionStyle === "brat" && !prefs.bratFootage;
   try {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = quality === "export" ? "high" : "low";
-  ctx.fillStyle = "#0b0b0c";
+  ctx.filter = "none";
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = bratPlateOnly ? bratPlateColor(prefs.bratPlate) : "#0b0b0c";
   ctx.fillRect(0, 0, width, height);
 
-  {
+  if (!bratPlateOnly) {
     const clip = clipForRecipe(recipe, clips, time) ?? clips[0];
     const look = lookFilter(recipe.look);
     const fr = frameRect(recipe.framing, width, height, time, recipe.seed);
@@ -512,6 +692,9 @@ export function drawFrame(
     }
   }
 
+  if (recipe.captionStyle === "brat") {
+    drawBrat(ctx, lyrics, time, width, height, prefs);
+  } else {
   const line =
     lyrics.find((entry) => {
       const words = entry.words;
@@ -531,6 +714,7 @@ export function drawFrame(
       prefs,
       quality,
     );
+  }
   }
   } catch {
     /* keep last frame rather than crash the studio */

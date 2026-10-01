@@ -12,7 +12,7 @@ import { CAPTION_EFFECTS, CAPTION_FONTS, CAPTION_STYLES, FRAMINGS, LOOKS, resolv
 import { downloadBlob, exportExtension, exportRecipe } from "@/lib/studio/export-video";
 import { useStudioLayout } from "@/lib/studio/layout";
 import { captionCaseLabel, captionPosLabel, captionSizeLabel, useStudio } from "@/lib/studio/store";
-import type { CaptionCaseId, CaptionPosId, CaptionSizeId } from "@/lib/studio/types";
+import type { CaptionCaseId, CaptionPosId, CaptionPrefs, CaptionSizeId } from "@/lib/studio/types";
 
 export function EditorWindow() {
   const recipes = useStudio((s) => s.recipes);
@@ -188,13 +188,13 @@ function StyleInspector({
     look: string;
     framing: string;
   } | null;
-  captionPrefs: { size: CaptionSizeId; position: CaptionPosId; textCase: CaptionCaseId };
-  setCaptionPrefs: (patch: Partial<{ size: CaptionSizeId; position: CaptionPosId; textCase: CaptionCaseId }>) => void;
+  captionPrefs: CaptionPrefs;
+  setCaptionPrefs: (patch: Partial<CaptionPrefs>) => void;
   busy: boolean;
   progress: number;
   message: string | null;
   onExport: () => void;
-  onChange: (patch: Partial<{ font: "brat" | "clean" | "editorial" | "poster"; captionStyle: "word" | "line" | "karaoke" | "typewriter"; effect: "none" | "outline" | "boxed"; look: "clean" | "film" | "crush" | "cool" | "fade"; framing: "fill" | "offset" | "letterbox" | "punch" }>) => void;
+  onChange: (patch: Partial<{ font: "brat" | "clean" | "editorial" | "poster"; captionStyle: "brat" | "word" | "line" | "karaoke" | "typewriter"; effect: "none" | "outline" | "boxed"; look: "clean" | "film" | "crush" | "cool" | "fade"; framing: "fill" | "offset" | "letterbox" | "punch" }>) => void;
 }) {
   const sizes: CaptionSizeId[] = ["s", "m", "l"];
   const positions: CaptionPosId[] = ["top", "mid", "low"];
@@ -229,6 +229,39 @@ function StyleInspector({
           </Chip>
         ))}
       </ChipGroup>
+      {recipe.captionStyle === "brat" ? (
+        <>
+          <ChipGroup label="Plate">
+            {(
+              [
+                ["white", "White"],
+                ["green", "Green"],
+                ["black", "Black"],
+              ] as const
+            ).map(([id, label]) => (
+              <Chip key={id} active={captionPrefs.bratPlate === id} onClick={() => setCaptionPrefs({ bratPlate: id })}>
+                {label}
+              </Chip>
+            ))}
+          </ChipGroup>
+          <ChipGroup label="Footage">
+            <Chip active={!captionPrefs.bratFootage} onClick={() => setCaptionPrefs({ bratFootage: false })}>
+              Off
+            </Chip>
+            <Chip active={captionPrefs.bratFootage} onClick={() => setCaptionPrefs({ bratFootage: true })}>
+              On
+            </Chip>
+          </ChipGroup>
+          <ChipGroup label="Fade">
+            <Chip active={!captionPrefs.bratFade} onClick={() => setCaptionPrefs({ bratFade: false })}>
+              Off
+            </Chip>
+            <Chip active={captionPrefs.bratFade} onClick={() => setCaptionPrefs({ bratFade: true })}>
+              80ms
+            </Chip>
+          </ChipGroup>
+        </>
+      ) : null}
       <ChipGroup label="Size">
         {sizes.map((id) => (
           <Chip key={id} active={captionPrefs.size === id} onClick={() => setCaptionPrefs({ size: id })}>

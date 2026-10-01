@@ -50,7 +50,7 @@ export function buildRecipes(opts: {
   region: Region;
   analysis: AudioAnalysis;
 }): Recipe[] {
-  const styles = opts.styles.length ? opts.styles : (["line"] as CaptionStyleId[]);
+  const styles = opts.styles.length ? opts.styles : (["brat"] as CaptionStyleId[]);
   const fonts = opts.fonts.length ? opts.fonts : (["clean"] as CaptionFontId[]);
   const effects = opts.effects.length ? opts.effects : (["none"] as CaptionEffectId[]);
   const looks = opts.looks.length ? opts.looks : (["film"] as LookId[]);

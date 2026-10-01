@@ -74,7 +74,7 @@ function Home() {
               {
                 icon: SlidersHorizontal,
                 t: "Type, line, and karaoke",
-                d: "Brat, Clean, Editorial, and Poster. One word, whole line, karaoke, or typewriter. Looks are Clean, Film, Crush, Cool, and Fade.",
+                d: "Brat is the default: a justified lowercase block on white, green, or black. Clean, Editorial, Poster, one word, whole line, karaoke, and typewriter are still there.",
               },
             ].map((f) => (
               <div key={f.t} className="rounded-xl bg-surface p-5 shadow-[0_0_0_1px_rgba(242,239,232,0.08)]">
