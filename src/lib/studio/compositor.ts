@@ -3,8 +3,10 @@ import { clipForRecipe } from "./recipes";
 import { DEFAULT_CAPTION_PREFS } from "./types";
 import type {
   BratPlateId,
+  BratPlateMode,
   CaptionEffectId,
   CaptionFontId,
+  CaptionPosId,
   CaptionPrefs,
   CaptionStyleId,
   FramingId,
@@ -257,6 +259,59 @@ export function bratSampleTime(lyrics: LyricLine[], start: number, end: number) 
   return Math.min(Math.max(start, t), Math.max(start, end - 0.04));
 }
 
+function yOrigin(position: CaptionPosId, frameH: number, blockH: number, lh: number) {
+  const mid = (frameH - blockH) / 2 + lh / 2;
+  if (position === "mid") return mid;
+  if (position === "top") return Math.max(lh * 0.35, frameH * 0.08 + lh / 2);
+  return Math.max(lh * 0.35, Math.min(frameH * 0.92 - blockH + lh / 2, frameH - lh * 0.4));
+}
+
+function chooseBrat(
+  ctx: CanvasRenderingContext2D,
+  labels: string[],
+  plateW: number,
+  frameH: number,
+  rowTarget?: number,
+) {
+  const target = plateW * 0.85;
+  const maxPx = Math.max(20, Math.round(plateW * 0.22));
+  const minPx = Math.max(12, Math.round(plateW * 0.03));
+  let best: {
+    score: number;
+    px: number;
+    gap: number;
+    widths: number[];
+    rows: number[][];
+    naturals: number[];
+    lh: number;
+  } | null = null;
+  for (let px = maxPx; px >= minPx; px -= 2) {
+    ctx.font = fontCss(px, "brat");
+    const gap = Math.max(ctx.measureText(" ").width, px * 0.18) * BRAT_SX;
+    const widths = labels.map((label) => ctx.measureText(label).width * BRAT_SX);
+    const rows = wrapVisual(widths, target, gap);
+    const naturals = rows.map((row) => {
+      const sum = row.reduce((acc, i) => acc + (widths[i] ?? 0), 0);
+      return sum + gap * Math.max(0, row.length - 1);
+    });
+    const longest = naturals.reduce((max, n) => Math.max(max, n), 0);
+    const lh = px * 1.12;
+    const rowCount = Math.max(1, rows.length);
+    const fill = longest / Math.max(1, target);
+    let score = Math.abs(fill - 1);
+    if (longest > target * 1.04) score += (longest / target - 1) * 5;
+    if (labels.length >= 3) {
+      if (rowCount < 3) score += (3 - rowCount) * 0.5;
+      if (rowCount > 5) score += (rowCount - 5) * 1;
+      if (rowTarget) score += Math.abs(rowCount - rowTarget) * 0.25;
+    }
+    if (rowCount * lh > frameH * 0.7) score += 2;
+    score -= px / 8000;
+    if (!best || score < best.score) best = { score, px, gap, widths, rows, naturals, lh };
+  }
+  return best!;
+}
+
 function drawBrat(
   ctx: CanvasRenderingContext2D,
   lyrics: LyricLine[],
@@ -264,6 +319,7 @@ function drawBrat(
   w: number,
   h: number,
   prefs: CaptionPrefs,
+  look?: { mode?: BratPlateMode; plate?: BratPlateId; position?: CaptionPosId; rows?: number },
 ) {
   const blocks = groupBratBlocks(bratTokens(lyrics));
   let active: BratTok[] | null = null;
@@ -284,39 +340,26 @@ function drawBrat(
   }
   if (!active?.length) return;
 
+  const mode = look?.mode ?? prefs.bratPlateMode ?? "full";
+  const plate = look?.plate ?? prefs.bratPlate;
+  const position = look?.position ?? "mid";
   const labels = active.map((word) => word.text);
-  const blockW = w * 0.7;
-  const mul = sizeMul(prefs.size);
-  const maxPx = Math.round(w * 0.18 * mul);
-  const minPx = Math.max(10, Math.round(w * 0.038 * mul));
-  const longest = labels.reduce((best, label) => (label.length > best.length ? label : best), labels[0] ?? "");
-  let px = fitFont(ctx, longest, blockW / BRAT_SX, maxPx, "brat", minPx);
-  const layoutAt = (size: number) => {
-    ctx.font = fontCss(size, "brat");
-    const gap = Math.max(ctx.measureText(" ").width, size * 0.22) * BRAT_SX;
-    const widths = labels.map((label) => ctx.measureText(label).width * BRAT_SX);
-    return { gap, widths, rows: wrapVisual(widths, blockW, gap) };
-  };
-  let laid = layoutAt(px);
-  while (px > minPx && (laid.rows.length > 5 || laid.rows.length * px * 1.15 > h * 0.78)) {
-    px -= 2;
-    laid = layoutAt(px);
-  }
-  const { gap, widths, rows } = laid;
-  const lh = px * 1.15;
-  const y0 = (h - rows.length * lh) / 2 + lh / 2;
-  const left = (w - blockW) / 2;
+  const plateW = mode === "block" ? w * 0.78 : w;
+  const laid = chooseBrat(ctx, labels, plateW, h, look?.rows);
+  const target = plateW * 0.85;
+  const left = (w - target) / 2;
+  const blockH = laid.rows.length * laid.lh;
+  const y0 = yOrigin(position, h, blockH, laid.lh);
   const spots: { label: string; start: number; x: number; y: number }[] = [];
-  rows.forEach((row, ri) => {
-    const sum = row.reduce((acc, i) => acc + (widths[i] ?? 0), 0);
-    const packed = sum + gap * Math.max(0, row.length - 1);
-    const last = ri === rows.length - 1;
-    const justify = row.length > 1 && (!last || packed >= blockW * 0.7);
-    const useGap = justify ? (blockW - sum) / (row.length - 1) : gap;
+  laid.rows.forEach((row, ri) => {
+    const sum = row.reduce((acc, i) => acc + (laid.widths[i] ?? 0), 0);
+    const natural = laid.naturals[ri] ?? sum;
+    const justify = row.length > 1 && natural >= target * 0.8 && natural <= target * 1.02;
+    const useGap = justify ? (target - sum) / Math.max(1, row.length - 1) : laid.gap;
     let x = left;
     for (const i of row) {
-      spots.push({ label: labels[i] ?? "", start: active![i]!.start, x, y: y0 + ri * lh });
-      x += (widths[i] ?? 0) + useGap;
+      spots.push({ label: labels[i] ?? "", start: active![i]!.start, x, y: y0 + ri * laid.lh });
+      x += (laid.widths[i] ?? 0) + useGap;
     }
   });
 
@@ -329,11 +372,18 @@ function drawBrat(
 
   ctx.save();
   ctx.globalAlpha = alpha;
+  if (mode === "block") {
+    const padY = laid.lh * 0.42;
+    const top = y0 - laid.lh / 2;
+    ctx.filter = "none";
+    ctx.fillStyle = bratPlateColor(plate);
+    ctx.fillRect((w - plateW) / 2, top - padY, plateW, blockH + padY * 2);
+  }
   ctx.filter = `blur(${(1.2 * w) / 720}px)`;
-  ctx.fillStyle = bratInk(prefs.bratPlate);
+  ctx.fillStyle = bratInk(plate);
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  ctx.font = fontCss(px, "brat");
+  ctx.font = fontCss(laid.px, "brat");
   for (const spot of spots) {
     if (time < spot.start) continue;
     ctx.save();
@@ -607,13 +657,17 @@ export function drawFrame(
   const { recipe, clips, lyrics, time, width, height } = opts;
   const prefs = opts.captionPrefs ?? DEFAULT_CAPTION_PREFS;
   const quality = opts.quality ?? "export";
-  const bratPlateOnly = recipe.captionStyle === "brat" && !prefs.bratFootage;
+  const bratMode = recipe.bratPlateMode ?? prefs.bratPlateMode ?? "full";
+  const bratPlate = recipe.bratPlate ?? prefs.bratPlate;
+  const showFootage =
+    recipe.captionStyle !== "brat" || bratMode === "block" || (recipe.bratPlateMode == null && prefs.bratFootage);
+  const bratPlateOnly = recipe.captionStyle === "brat" && !showFootage;
   try {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = quality === "export" ? "high" : "low";
   ctx.filter = "none";
   ctx.globalAlpha = 1;
-  ctx.fillStyle = bratPlateOnly ? bratPlateColor(prefs.bratPlate) : "#0b0b0c";
+  ctx.fillStyle = bratPlateOnly ? bratPlateColor(bratPlate) : "#0b0b0c";
   ctx.fillRect(0, 0, width, height);
 
   if (!bratPlateOnly) {
@@ -693,7 +747,12 @@ export function drawFrame(
   }
 
   if (recipe.captionStyle === "brat") {
-    drawBrat(ctx, lyrics, time, width, height, prefs);
+    drawBrat(ctx, lyrics, time, width, height, prefs, {
+      mode: bratMode,
+      plate: bratPlate,
+      position: recipe.bratPosition ?? "mid",
+      rows: recipe.bratRows,
+    });
   } else {
   const line =
     lyrics.find((entry) => {

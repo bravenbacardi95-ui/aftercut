@@ -89,8 +89,8 @@ export function VaryWindow() {
             ))}
           </ChipGroup>
           <p className="text-xs text-subtle">
-            Fonts add and remove. Each version is its own font, style, look, framing, cut pattern, and clip order. This batch will be {unique} unique
-            {unique === batchSize ? "." : ` of ${batchSize}.`}
+            Fonts add and remove. This batch will be {unique} unique
+            {unique === batchSize ? "" : ` of ${batchSize}`}. Plate color, full or block, position, and rows change on each one.
           </p>
           <ChipGroup label="Effect">
             {CAPTION_EFFECTS.map((s) => (
@@ -109,6 +109,12 @@ export function VaryWindow() {
           {captionStyles.includes("brat") ? (
             <>
               <ChipGroup label="Brat plate">
+                <Chip active={(captionPrefs.bratPlateMode ?? "full") === "full"} onClick={() => setCaptionPrefs({ bratPlateMode: "full" })}>
+                  Full
+                </Chip>
+                <Chip active={captionPrefs.bratPlateMode === "block"} onClick={() => setCaptionPrefs({ bratPlateMode: "block" })}>
+                  Block
+                </Chip>
                 {(
                   [
                     ["white", "White"],

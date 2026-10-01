@@ -9,6 +9,7 @@ export type CaptionSizeId = "s" | "m" | "l";
 export type CaptionPosId = "top" | "mid" | "low";
 export type CaptionCaseId = "as-is" | "upper";
 export type BratPlateId = "white" | "green" | "black";
+export type BratPlateMode = "full" | "block";
 export type TranscribeSource = "stt" | "aligned" | "manual" | null;
 export type ClipOrigin = "stock" | "upload";
 export type FootageTab = "stock" | "upload";
@@ -37,6 +38,8 @@ export type CaptionPrefs = {
   textCase: CaptionCaseId;
   /** Flat field behind the Brat layout. Ignored by the other caption styles. */
   bratPlate: BratPlateId;
+  /** Full covers the frame. Block sits behind the words and leaves the footage around it. */
+  bratPlateMode: BratPlateMode;
   /** When off, Brat covers the frame with the plate instead of the clip. */
   bratFootage: boolean;
   /** 80ms fade in and out between Brat blocks. Off by default. */
@@ -86,6 +89,11 @@ export type Recipe = {
   cuts: number[];
   /** Split, join, or a dragged cut. Snippet moves shift these instead of rebuilding them. */
   cutsEdited?: boolean;
+  /** Wall versions each pick their own Brat plate so they don't all look the same. */
+  bratPlate?: BratPlateId;
+  bratPlateMode?: BratPlateMode;
+  bratPosition?: CaptionPosId;
+  bratRows?: 3 | 4 | 5;
 };
 
 export type Region = { start: number; end: number };
@@ -95,6 +103,7 @@ export const DEFAULT_CAPTION_PREFS: CaptionPrefs = {
   position: "mid",
   textCase: "as-is",
   bratPlate: "white",
+  bratPlateMode: "full",
   bratFootage: false,
   bratFade: false,
 };

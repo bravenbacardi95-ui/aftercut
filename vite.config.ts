@@ -175,6 +175,7 @@ export default defineConfig(({ command, isPreview }) => ({
   },
   resolve: { tsconfigPaths: true },
   optimizeDeps: {
+    include: ["onnxruntime-web/webgpu"],
     exclude: ["@huggingface/transformers", "onnxruntime-node", "sharp"],
   },
   ssr: {

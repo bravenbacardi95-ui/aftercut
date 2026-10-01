@@ -210,10 +210,7 @@ function EditMenu() {
   const saveLyricVersion = useStudio((s) => s.saveLyricVersion);
   const trackName = useStudio((s) => s.trackName);
   const words = useStudio((s) => s.words);
-  const isolateVocals = useStudio((s) => s.isolateVocals);
-  const speechEngine = useStudio((s) => s.speechEngine);
   const transcribing = useStudio((s) => s.transcribing);
-  const transcribeBlocked = speechEngine === "down" && isolateVocals;
   return (
     <Menu label="Edit">
       <MenuItem disabled={!canUndo} hint="⌘Z" onClick={() => undo()}>
@@ -228,7 +225,7 @@ function EditMenu() {
       >
         Save lyric version
       </MenuItem>
-      <MenuItem disabled={transcribeBlocked || transcribing} onClick={() => void transcribe()}>
+      <MenuItem disabled={transcribing} onClick={() => void transcribe()}>
         Transcribe instead
       </MenuItem>
       <MenuItem onClick={() => addWordAt(region.start)}>Add word</MenuItem>

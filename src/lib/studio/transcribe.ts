@@ -1,7 +1,7 @@
 import { blobToBase64, encodeMixWav, ensureDecoded } from "./audio-clip";
 import { alignWordsToBeats, groupByAuthoredLine, groupWordsIntoLines, nextWordId, parseLyricText, tokenizeLine, wordsFromStt } from "./lyrics";
 import { applyColloquialFixes } from "./lyric-sense";
-import { browserSpeechError, engineDown, publicSpeechError, SPEECH_ENGINE_DOWN } from "./speech-error";
+import { browserSpeechError, engineDown, publicSpeechError, serverTimedOut, SPEECH_ENGINE_DOWN, SPEECH_TIMEOUT } from "./speech-error";
 import { speechEngineReady } from "./speech-engine";
 import { transcribeStem, type StemWord } from "./transcribe-stem.fn";
 import { MIN_WORD_DUR, type AudioAnalysis, type LyricWord, type Region } from "./types";
@@ -62,13 +62,15 @@ export async function transcribeRegion(
     try {
       heard = await askStem(wavBase64, opts.onStatus);
     } catch (err) {
-      if (!engineDown(err)) return empty(publicSpeechError(err));
+      if (serverTimedOut(err) || !engineDown(err)) return empty(publicSpeechError(err));
       heard = { ok: false, error: SPEECH_ENGINE_DOWN, unavailable: true };
     }
     if (heard.ok && heard.words.length) {
       return { words: mapAlignedWords(heard.words, mix.offset, shift), source: "stt", warning: null };
     }
-    if (!heard.ok && !heard.unavailable && !engineDown(heard.error)) return empty(publicSpeechError(heard.error));
+    if (!heard.ok && (serverTimedOut(heard.error) || heard.error === SPEECH_TIMEOUT || (!heard.unavailable && !engineDown(heard.error)))) {
+      return empty(publicSpeechError(heard.error));
+    }
     if (heard.ok) return empty("No speech heard in this clip.");
   }
 

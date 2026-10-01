@@ -187,6 +187,8 @@ function StyleInspector({
     effect: string;
     look: string;
     framing: string;
+    bratPlate?: "white" | "green" | "black";
+    bratPlateMode?: "full" | "block";
   } | null;
   captionPrefs: CaptionPrefs;
   setCaptionPrefs: (patch: Partial<CaptionPrefs>) => void;
@@ -194,12 +196,14 @@ function StyleInspector({
   progress: number;
   message: string | null;
   onExport: () => void;
-  onChange: (patch: Partial<{ font: "brat" | "clean" | "editorial" | "poster"; captionStyle: "brat" | "word" | "line" | "karaoke" | "typewriter"; effect: "none" | "outline" | "boxed"; look: "clean" | "film" | "crush" | "cool" | "fade"; framing: "fill" | "offset" | "letterbox" | "punch" }>) => void;
+  onChange: (patch: Partial<{ font: "brat" | "clean" | "editorial" | "poster"; captionStyle: "brat" | "word" | "line" | "karaoke" | "typewriter"; effect: "none" | "outline" | "boxed"; look: "clean" | "film" | "crush" | "cool" | "fade"; framing: "fill" | "offset" | "letterbox" | "punch"; bratPlate: "white" | "green" | "black"; bratPlateMode: "full" | "block" }>) => void;
 }) {
   const sizes: CaptionSizeId[] = ["s", "m", "l"];
   const positions: CaptionPosId[] = ["top", "mid", "low"];
   const cases: CaptionCaseId[] = ["as-is", "upper"];
   const exporting = useStudio((s) => s.exporting);
+  const plate = recipe?.bratPlate ?? captionPrefs.bratPlate;
+  const plateMode = recipe?.bratPlateMode ?? captionPrefs.bratPlateMode ?? "full";
   if (!recipe) return <p className="text-sm text-muted">Open a version from the wall to restyle it.</p>;
   return (
     <div className="flex flex-col gap-5">
@@ -232,6 +236,24 @@ function StyleInspector({
       {recipe.captionStyle === "brat" ? (
         <>
           <ChipGroup label="Plate">
+            <Chip
+              active={plateMode === "full"}
+              onClick={() => {
+                onChange({ bratPlateMode: "full" });
+                setCaptionPrefs({ bratPlateMode: "full" });
+              }}
+            >
+              Full
+            </Chip>
+            <Chip
+              active={plateMode === "block"}
+              onClick={() => {
+                onChange({ bratPlateMode: "block" });
+                setCaptionPrefs({ bratPlateMode: "block" });
+              }}
+            >
+              Block
+            </Chip>
             {(
               [
                 ["white", "White"],
@@ -239,7 +261,14 @@ function StyleInspector({
                 ["black", "Black"],
               ] as const
             ).map(([id, label]) => (
-              <Chip key={id} active={captionPrefs.bratPlate === id} onClick={() => setCaptionPrefs({ bratPlate: id })}>
+              <Chip
+                key={id}
+                active={plate === id}
+                onClick={() => {
+                  onChange({ bratPlate: id });
+                  setCaptionPrefs({ bratPlate: id });
+                }}
+              >
                 {label}
               </Chip>
             ))}

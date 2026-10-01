@@ -55,7 +55,6 @@ async function configureOrt() {
   };
   const wasm = ort.env?.wasm;
   if (!wasm) throw new Error("The in-browser hearing model failed to start.");
-  (globalThis as unknown as Record<symbol, unknown>)[Symbol.for("onnxruntime")] = ort;
   wasm.wasmPaths = paths;
   wasm.numThreads = 1;
   wasm.proxy = false;

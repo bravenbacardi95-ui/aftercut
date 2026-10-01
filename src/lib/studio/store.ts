@@ -146,7 +146,7 @@ type StudioState = {
   makeSingle: () => void;
   generate: () => void;
   selectRecipe: (id: string | null) => void;
-  updateSelected: (patch: Partial<Pick<Recipe, "captionStyle" | "font" | "effect" | "look" | "framing">>) => void;
+  updateSelected: (patch: Partial<Pick<Recipe, "captionStyle" | "font" | "effect" | "look" | "framing" | "bratPlate" | "bratPlateMode">>) => void;
   saveLyricVersion: (name: string) => void;
   loadLyricVersion: (id: string) => void;
   deleteLyricVersion: (id: string) => void;
@@ -536,21 +536,19 @@ export const useStudio = create<StudioState>((set, get) => ({
       return;
     }
     if (!get().analysis) return;
-    if (get().speechEngine !== "ready") {
-      const ready = get().speechEngine === "down" ? false : await speechEngineReady();
-      if (!ready) {
-        set({
-          speechEngine: "down",
-          transcribing: false,
-          transcribeStatus: "",
-          syncProgress: null,
-          notice: SPEECH_ENGINE_DOWN,
-          noticeError: true,
-        });
-        return;
-      }
-      set({ speechEngine: "ready" });
+    const ready = await speechEngineReady(get().speechEngine !== "ready");
+    if (!ready) {
+      set({
+        speechEngine: "down",
+        transcribing: false,
+        transcribeStatus: "",
+        syncProgress: null,
+        notice: SPEECH_ENGINE_DOWN,
+        noticeError: true,
+      });
+      return;
     }
+    if (get().speechEngine !== "ready") set({ speechEngine: "ready" });
     const gen = get().transcribeGen + 1;
     const region = get().region;
     set({
@@ -665,8 +663,8 @@ export const useStudio = create<StudioState>((set, get) => ({
     }
   },
   transcribe: async () => {
-    if (get().isolateVocals && get().speechEngine !== "ready") {
-      const ready = get().speechEngine === "down" ? false : await speechEngineReady();
+    if (get().isolateVocals) {
+      const ready = await speechEngineReady(get().speechEngine !== "ready");
       if (!ready) {
         set({
           speechEngine: "down",
@@ -677,7 +675,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         });
         return;
       }
-      set({ speechEngine: "ready" });
+      if (get().speechEngine !== "ready") set({ speechEngine: "ready" });
     }
     const gen = get().transcribeGen + 1;
     set({ transcribeGen: gen, transcribing: true, notice: null, noticeError: false, lyricsDirty: false, transcribeStatus: get().isolateVocals ? "Isolating vocals…" : "Hearing lyrics…" });

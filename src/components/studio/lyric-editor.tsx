@@ -38,12 +38,9 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
   const region = useStudio((s) => s.region);
   const lastRegion = useStudio((s) => s.lastTranscribedRegion);
   const activeLyricId = useStudio((s) => s.activeLyricId);
-  const isolateVocals = useStudio((s) => s.isolateVocals);
-  const speechEngine = useStudio((s) => s.speechEngine);
   const songKey = lyricKey(trackName, analysis?.duration ?? 0);
   const [mode, setMode] = useState<"words" | "text" | "transcribe">("words");
   const [versionName, setVersionName] = useState("");
-  const transcribeBlocked = speechEngine === "down" && isolateVocals;
 
   const selected = words.find((w) => w.id === selectedWordId) ?? null;
 
@@ -177,7 +174,7 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
           <p className="text-sm text-muted">
             Transcribe this snippet from the vocal. Isolate vocals uses the server speech engine. Turn it off to hear the clip in the browser.
           </p>
-          <Button type="button" onClick={() => void transcribe()} disabled={transcribing || transcribeBlocked}>
+          <Button type="button" onClick={() => void transcribe()} disabled={transcribing}>
             {transcribing ? "Transcribing…" : "Transcribe instead"}
           </Button>
           {notice ? (
@@ -291,14 +288,14 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
 
       {actions ? (
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={() => void transcribe()} disabled={transcribing || transcribeBlocked}>
+        <Button type="button" variant="secondary" size="sm" onClick={() => void transcribe()} disabled={transcribing}>
           {transcribing ? <LoaderCircle className="size-4 animate-spin" /> : <Mic className="size-4" />}
           {transcribing ? "Transcribing…" : "Transcribe instead"}
         </Button>
         {lastRegion &&
         words.length &&
         (Math.abs(lastRegion.start - region.start) > 0.08 || Math.abs(lastRegion.end - region.end) > 0.08) ? (
-          <Button type="button" variant="secondary" size="sm" onClick={() => void syncLyrics()} disabled={transcribing || speechEngine === "down"}>
+          <Button type="button" variant="secondary" size="sm" onClick={() => void syncLyrics()} disabled={transcribing}>
             Re-sync to new window
           </Button>
         ) : null}

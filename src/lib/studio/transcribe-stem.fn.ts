@@ -1,9 +1,10 @@
+import { spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createServerFn } from "@tanstack/react-start";
 import { resolveAlignerPython } from "./py-daemon";
-import { engineDown, publicSpeechError, SPEECH_ENGINE_DOWN } from "./speech-error";
+import { engineDown, publicSpeechError, serverTimedOut, SPEECH_ENGINE_DOWN, SPEECH_TIMEOUT } from "./speech-error";
 import { cloudTranscript } from "./transcribe.fn";
 import { alignDaemon, transcribeDaemon } from "./workers.server";
 
@@ -20,12 +21,34 @@ export type TranscribeStemResult =
   | { ok: false; error: string; unavailable?: boolean };
 
 const MAX_B64 = 4_000_000;
+let importsOkAt = 0;
+
+function pythonCanHear(bin: string): Promise<boolean> {
+  if (importsOkAt && Date.now() - importsOkAt < 20_000) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const child = spawn(bin, ["-c", "import torch, faster_whisper"], { stdio: "ignore" });
+    const timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve(false);
+    }, 12_000);
+    child.once("exit", (code) => {
+      clearTimeout(timer);
+      if (code === 0) importsOkAt = Date.now();
+      resolve(code === 0);
+    });
+    child.once("error", () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+  });
+}
 
 export const speechEngineStatus = createServerFn({ method: "POST" })
   .validator((input: { ping?: boolean }) => input ?? {})
   .handler(async (): Promise<{ ready: boolean }> => {
     const resolved = resolveAlignerPython();
-    return { ready: !("error" in resolved) };
+    if ("error" in resolved) return { ready: false };
+    return { ready: await pythonCanHear(resolved.bin) };
   });
 
 export const transcribeStem = createServerFn({ method: "POST" })
@@ -88,10 +111,12 @@ async function fromDaemon(wav: string): Promise<TranscribeStemResult | "fallback
       return { ok: true, text, words, asrMs: num(message.asrMs), alignMs: num(message.alignMs) };
     }
     const error = typeof message.error === "string" ? message.error : "Transcription failed.";
+    if (serverTimedOut(error)) return { ok: false, error: SPEECH_TIMEOUT };
     if (/no speech|forced alignment/i.test(error)) return { ok: false, error: publicSpeechError(error) };
     if (process.env.XAI_API_KEY?.trim()) return "fallback";
     return { ok: false, error: publicSpeechError(error), unavailable: engineDown(error) };
   } catch (err) {
+    if (serverTimedOut(err)) return { ok: false, error: SPEECH_TIMEOUT };
     if (process.env.XAI_API_KEY?.trim() && !engineDown(err)) {
       const text = err instanceof Error ? err.message : String(err);
       if (/no speech|forced alignment/i.test(text)) return { ok: false, error: publicSpeechError(text) };

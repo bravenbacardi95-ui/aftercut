@@ -89,7 +89,7 @@ export function PlayerCanvas({
       const videoLive = Boolean(activeSrc);
       const gen = mediaGeneration();
       const prefs = prefsRef.current;
-      const key = `${rec.id}:${rec.captionStyle}:${rec.font}:${rec.effect}:${rec.look}:${rec.framing}:${lyricsRef.current.length}:${prefs.size}${prefs.position}${prefs.textCase}${prefs.bratPlate}${prefs.bratFootage ? 1 : 0}${prefs.bratFade ? 1 : 0}:${gen}`;
+      const key = `${rec.id}:${rec.captionStyle}:${rec.font}:${rec.effect}:${rec.look}:${rec.framing}:${lyricsRef.current.length}:${prefs.size}${prefs.position}${prefs.textCase}${prefs.bratPlate}${prefs.bratPlateMode ?? "full"}${prefs.bratFootage ? 1 : 0}${prefs.bratFade ? 1 : 0}:${rec.bratPlate ?? ""}${rec.bratPlateMode ?? ""}${rec.bratPosition ?? ""}${rec.bratRows ?? ""}:${gen}`;
       const moved = Math.abs(t - lastT) > 0.008;
       const dirty = key !== lastKey || playing !== lastPlaying || gen !== lastGen;
       const frameGap = 32;

@@ -1,5 +1,5 @@
 import { makeCuts } from "./beats";
-import type { AudioAnalysis, CaptionEffectId, CaptionFontId, CaptionStyleId, FramingId, LookId, MediaClip, PacingId, Recipe, Region } from "./types";
+import type { AudioAnalysis, BratPlateId, BratPlateMode, CaptionEffectId, CaptionFontId, CaptionPosId, CaptionStyleId, FramingId, LookId, MediaClip, PacingId, Recipe, Region } from "./types";
 
 function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -9,6 +9,19 @@ function mulberry32(seed: number) {
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function bratVariant(index: number): Pick<Recipe, "bratPlate" | "bratPlateMode" | "bratPosition" | "bratRows"> {
+  const plates: BratPlateId[] = ["white", "green", "black"];
+  const modes: BratPlateMode[] = ["full", "block"];
+  const positions: CaptionPosId[] = ["top", "mid", "low"];
+  const rows = [3, 4, 5] as const;
+  return {
+    bratPlate: plates[index % 3]!,
+    bratPlateMode: modes[Math.floor(index / 3) % 2]!,
+    bratPosition: positions[Math.floor(index / 6) % 3]!,
+    bratRows: rows[Math.floor(index / 18) % 3]!,
   };
 }
 
@@ -22,13 +35,19 @@ function shuffle<T>(items: T[], seed: number): T[] {
   return out;
 }
 
-export function recipeKey(recipe: Pick<Recipe, "font" | "captionStyle" | "effect" | "look" | "framing" | "cuts" | "clipIds">) {
+export function recipeKey(
+  recipe: Pick<Recipe, "font" | "captionStyle" | "effect" | "look" | "framing" | "cuts" | "clipIds" | "bratPlate" | "bratPlateMode" | "bratPosition" | "bratRows">,
+) {
   return [
     recipe.font,
     recipe.captionStyle,
     recipe.effect,
     recipe.look,
     recipe.framing,
+    recipe.bratPlate ?? "",
+    recipe.bratPlateMode ?? "",
+    recipe.bratPosition ?? "",
+    recipe.bratRows ?? "",
     recipe.cuts.map((cut) => cut.toFixed(3)).join(","),
     recipe.clipIds.join(","),
   ].join("|");
@@ -80,6 +99,7 @@ export function buildRecipes(opts: {
       const cuts = makeCuts(opts.analysis.beats, opts.region.start, opts.region.end, opts.pacing, opts.analysis, seed);
       const segments = Math.max(1, cuts.length - 1);
       const clipIds = Array.from({ length: segments }, (_, seg) => ids[order[seg % order.length]! % ids.length]!);
+      const brat = combo.style === "brat" ? bratVariant(i) : {};
       const draft = {
         font: combo.font,
         captionStyle: combo.style,
@@ -88,6 +108,7 @@ export function buildRecipes(opts: {
         framing: combo.framing,
         cuts,
         clipIds,
+        ...brat,
       };
       const key = recipeKey(draft);
       if (used.has(key)) continue;
@@ -105,6 +126,7 @@ export function buildRecipes(opts: {
         clipOrder: order,
         clipIds,
         cuts,
+        ...brat,
       });
       placed = true;
     }

@@ -3,15 +3,20 @@ import { speechEngineStatus } from "./transcribe-stem.fn";
 const TTL_MS = 15_000;
 let cached: { at: number; ready: boolean } | null = null;
 
-export async function speechEngineReady(force = false): Promise<boolean> {
-  if (!force && cached && Date.now() - cached.at < TTL_MS) return cached.ready;
+async function probe(): Promise<{ ok: boolean; failed: boolean }> {
   try {
     const result = await speechEngineStatus({ data: {} });
-    const ready = Boolean(result?.ready);
-    cached = { at: Date.now(), ready };
-    return ready;
+    return { ok: Boolean(result?.ready), failed: false };
   } catch {
-    cached = { at: Date.now(), ready: false };
-    return false;
+    return { ok: false, failed: true };
   }
+}
+
+export async function speechEngineReady(force = false): Promise<boolean> {
+  if (!force && cached && Date.now() - cached.at < TTL_MS) return cached.ready;
+  let result = await probe();
+  if (result.failed) result = await probe();
+  if (result.ok) cached = { at: Date.now(), ready: true };
+  else cached = null;
+  return result.ok;
 }

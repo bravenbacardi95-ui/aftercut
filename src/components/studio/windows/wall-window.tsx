@@ -60,7 +60,7 @@ export function WallWindow() {
           <h1 className="text-lg font-medium">Keep the ones that land</h1>
           <p className="mt-1 text-sm text-muted">
             {recipes.length
-              ? `${recipes.length} versions · ${unique} unique across font, style, look, framing, cuts, and clip order. Open one to change that version only.`
+              ? `${recipes.length} versions · ${unique} unique. Plate color, full or block, position, and row count change from one to the next.`
               : "Build a batch from Variations first. One video mode is separate — it won’t fill this wall."}
           </p>
         </div>
