@@ -313,7 +313,7 @@ function layoutBrat(
   const short = labels.length <= 4;
   const wide = frameW / Math.max(1, frameH) >= 1.45;
   const target = wide ? Math.min(plateW * 0.85, frameH * 0.7) : plateW * 0.85;
-  const maxPx = Math.max(12, Math.round(plateW * (short ? 0.4 : 0.2)));
+  const searchMax = Math.max(12, Math.round(plateW * (short ? 0.4 : 0.2)));
   const minPx = Math.max(8, Math.round(plateW * 0.028));
   const measure = (px: number) => {
     ctx.font = fontCss(px, "brat");
@@ -329,13 +329,14 @@ function layoutBrat(
     return { px, gap, widths, rows, naturals, lh, target, longest, rowCount: Math.max(1, rows.length) };
   };
 
-  // Size changes the font before wrapping. The column stays plateW * 0.85.
-  const finish = (laid: BratLaid): BratLaid => {
-    if (sizeMul === 1) return laid;
-    const cap = Math.min(target, plateW * 0.85);
-    let px = Math.max(minPx, Math.round(laid.px * sizeMul));
+  const cap = Math.min(target, plateW * 0.85);
+  const over = (laid: { longest: number; rowCount: number; lh: number }) =>
+    laid.longest > cap || laid.rowCount * laid.lh > frameH * 0.7;
+
+  const fitFrom = (startPx: number) => {
+    let px = Math.max(minPx, Math.round(startPx));
     let next = measure(px);
-    while (px > minPx && next.longest > cap) {
+    while (px > minPx && over(next)) {
       const stepped = Math.max(minPx, px - 2);
       if (stepped === px) break;
       px = stepped;
@@ -344,30 +345,63 @@ function layoutBrat(
     return next;
   };
 
+  let base: BratLaid | null = null;
   if (short) {
-    for (let px = maxPx; px >= minPx; px -= 2) {
+    for (let px = searchMax; px >= minPx; px -= 2) {
       const laid = measure(px);
-      if (laid.longest <= target * 1.02 && laid.rowCount * laid.lh <= frameH * 0.7) return finish(laid);
+      if (laid.longest <= target * 1.02 && laid.rowCount * laid.lh <= frameH * 0.7) {
+        base = laid;
+        break;
+      }
     }
+  }
+  if (!base) {
+    let best: (BratLaid & { score: number }) | null = null;
+    for (let px = searchMax; px >= minPx; px -= 2) {
+      const laid = measure(px);
+      const fill = laid.longest / Math.max(1, target);
+      let score = Math.abs(fill - 1);
+      if (laid.longest > target * 1.04) score += (laid.longest / target - 1) * 5;
+      const wantRows = labels.length > 4 || wide;
+      if (wantRows && labels.length >= 3) {
+        if (laid.rowCount < 3) score += (3 - laid.rowCount) * 0.9;
+        if (laid.rowCount > 5) score += (laid.rowCount - 5) * 1.2;
+        if (rowTarget) score += Math.abs(laid.rowCount - rowTarget) * 0.35;
+      }
+      if (laid.rowCount * laid.lh > frameH * 0.7) score += 2;
+      score -= (laid.px / Math.max(1, plateW)) * (BRAT_CANON / 5000);
+      if (!best || score < best.score) best = { score, ...laid };
+    }
+    base = best ?? measure(minPx);
   }
 
-  let best: (BratLaid & { score: number }) | null = null;
-  for (let px = maxPx; px >= minPx; px -= 2) {
-    const laid = measure(px);
-    const fill = laid.longest / Math.max(1, target);
-    let score = Math.abs(fill - 1);
-    if (laid.longest > target * 1.04) score += (laid.longest / target - 1) * 5;
-    const wantRows = labels.length > 4 || wide;
-    if (wantRows && labels.length >= 3) {
-      if (laid.rowCount < 3) score += (3 - laid.rowCount) * 0.9;
-      if (laid.rowCount > 5) score += (laid.rowCount - 5) * 1.2;
-      if (rowTarget) score += Math.abs(laid.rowCount - rowTarget) * 0.35;
-    }
-    if (laid.rowCount * laid.lh > frameH * 0.7) score += 2;
-    score -= (laid.px / Math.max(1, plateW)) * (BRAT_CANON / 5000);
-    if (!best || score < best.score) best = { score, ...laid };
+  const large = fitFrom(base.px * 1.22);
+  const medium = fitFrom(base.px);
+  const small = fitFrom(base.px * 0.82);
+  if (large.px >= medium.px * 1.1) {
+    if (sizeMul > 1) return large;
+    if (sizeMul < 1) return small;
+    return medium;
   }
-  return finish(best ?? measure(minPx));
+
+  const maxPx = large.px;
+  let medPx = Math.round(maxPx * 0.88);
+  while (medPx > 1 && maxPx < medPx * 1.1) medPx -= 1;
+  let mediumLaid = measure(medPx);
+  while (medPx > 1 && over(mediumLaid)) {
+    medPx -= 1;
+    mediumLaid = measure(medPx);
+  }
+  let smPx = Math.round(medPx * 0.82);
+  while (smPx >= medPx && smPx > 1) smPx -= 1;
+  let smallLaid = measure(smPx);
+  while (smPx > 1 && over(smallLaid) && smPx < medPx) {
+    smPx -= 1;
+    smallLaid = measure(smPx);
+  }
+  if (sizeMul > 1) return large;
+  if (sizeMul < 1) return smallLaid;
+  return mediumLaid;
 }
 
 function chooseBrat(
