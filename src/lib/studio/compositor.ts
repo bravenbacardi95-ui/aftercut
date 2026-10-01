@@ -308,6 +308,7 @@ function layoutBrat(
   frameW: number,
   frameH: number,
   rowTarget: number | undefined,
+  sizeMul = 1,
 ): BratLaid {
   const short = labels.length <= 4;
   const wide = frameW / Math.max(1, frameH) >= 1.45;
@@ -328,10 +329,25 @@ function layoutBrat(
     return { px, gap, widths, rows, naturals, lh, target, longest, rowCount: Math.max(1, rows.length) };
   };
 
+  // Size changes the font before wrapping. The column stays plateW * 0.85.
+  const finish = (laid: BratLaid): BratLaid => {
+    if (sizeMul === 1) return laid;
+    const cap = Math.min(target, plateW * 0.85);
+    let px = Math.max(minPx, Math.round(laid.px * sizeMul));
+    let next = measure(px);
+    while (px > minPx && next.longest > cap) {
+      const stepped = Math.max(minPx, px - 2);
+      if (stepped === px) break;
+      px = stepped;
+      next = measure(px);
+    }
+    return next;
+  };
+
   if (short) {
     for (let px = maxPx; px >= minPx; px -= 2) {
       const laid = measure(px);
-      if (laid.longest <= target * 1.02 && laid.rowCount * laid.lh <= frameH * 0.7) return laid;
+      if (laid.longest <= target * 1.02 && laid.rowCount * laid.lh <= frameH * 0.7) return finish(laid);
     }
   }
 
@@ -351,7 +367,7 @@ function layoutBrat(
     score -= (laid.px / Math.max(1, plateW)) * (BRAT_CANON / 5000);
     if (!best || score < best.score) best = { score, ...laid };
   }
-  return best ?? measure(minPx);
+  return finish(best ?? measure(minPx));
 }
 
 function chooseBrat(
@@ -361,13 +377,15 @@ function chooseBrat(
   frameW: number,
   frameH: number,
   rowTarget: number | undefined,
+  size: CaptionPrefs["size"],
 ) {
   const aspect = frameW / Math.max(1, frameH);
   const plateFrac = plateW / Math.max(1, frameW);
-  const key = `${plateFrac.toFixed(4)}|${aspect.toFixed(4)}|${rowTarget ?? ""}|${labels.join("\n")}`;
+  const mul = sizeMul(size);
+  const key = `${plateFrac.toFixed(4)}|${aspect.toFixed(4)}|${rowTarget ?? ""}|${mul}|${labels.join("\n")}`;
   let canon = bratLayoutCache.get(key);
   if (!canon) {
-    canon = layoutBrat(ctx, labels, BRAT_CANON * plateFrac, BRAT_CANON, BRAT_CANON / aspect, rowTarget);
+    canon = layoutBrat(ctx, labels, BRAT_CANON * plateFrac, BRAT_CANON, BRAT_CANON / aspect, rowTarget, mul);
     if (bratLayoutCache.size > 48) bratLayoutCache.clear();
     bratLayoutCache.set(key, canon);
   }
@@ -407,7 +425,7 @@ function drawBrat(
   const position = look?.position ?? prefs.position ?? "mid";
   const labels = active.map((word) => word.text);
   const plateW = mode === "block" ? w * 0.78 : w;
-  const laid = scaleLaid(chooseBrat(ctx, labels, plateW, w, h, look?.rows), sizeMul(prefs.size));
+  const laid = chooseBrat(ctx, labels, plateW, w, h, look?.rows, prefs.size);
   const target = laid.target;
   const left = (w - target) / 2;
   const blockH = laid.rows.length * laid.lh;
