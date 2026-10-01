@@ -1,4 +1,4 @@
-# Aftercut
+# ZYXYS
 
 Lyric video editor. Paste lyrics, isolate the vocal, and force-align every word to the snippet.
 

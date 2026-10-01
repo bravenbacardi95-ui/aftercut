@@ -53,6 +53,7 @@ function pgliteBootstrapPlugin(): Plugin {
 
 function lyricWorkersPlugin(): Plugin {
   return {
+    // legacy name, do not rename
     name: "aftercut:lyric-workers",
     apply: "serve",
     async configureServer(server) {

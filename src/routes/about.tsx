@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
+import { BRAND } from "@/lib/brand";
 
 export const Route = createFileRoute("/about")({
   component: About,
   head: () => ({
-    meta: [{ title: "About · Aftercut" }],
+    meta: [{ title: `About · ${BRAND.name}` }],
   }),
 });
 
@@ -17,7 +18,7 @@ function About() {
         <h1 className="mt-3 font-serif text-4xl tracking-tight md:text-5xl">Upload the song, pick footage, post the result.</h1>
         <div className="mt-8 space-y-5 text-base leading-relaxed text-muted">
           <p>
-            Aftercut is a replica of the batch-video studio musicians use after a track is finished — beat-synced cuts,
+            {BRAND.name} is a replica of the batch-video studio musicians use after a track is finished — beat-synced cuts,
             word-timed lyric captions, a wall of versions to choose from. The original product caps a batch at ten and a
             basic plan at sixty exports a month. That is the part we did not keep.
           </p>
@@ -29,7 +30,7 @@ function About() {
             next to one-word, whole-line, karaoke, and typewriter. Beat detection, packs, and
             export still run in this browser — one video, or the whole wall as a zip.
           </p>
-          <p>Built for everything after the music is made.</p>
+          <p>{BRAND.tagline}</p>
         </div>
         <Link
           to="/studio"

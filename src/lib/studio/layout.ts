@@ -13,6 +13,7 @@ type Layout = {
   setTimelineZoom: (n: number) => void;
 };
 
+// legacy name, do not rename
 const KEY = "aftercut-layout";
 
 function load(): Pick<Layout, "timelineH" | "previewW" | "inspectorW" | "cutH"> {

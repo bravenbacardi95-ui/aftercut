@@ -3,6 +3,7 @@ import { AudioLines, Captions, Download, Grid2x2, Scissors, SlidersHorizontal } 
 import { DropTrack } from "@/components/drop-track";
 import { LandingReel } from "@/components/landing-reel";
 import { SiteFooter, SiteHeader } from "@/components/site-header";
+import { BRAND } from "@/lib/brand";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -13,7 +14,7 @@ function Home() {
       <main>
         <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-8 pt-6 md:px-8 lg:grid-cols-2 lg:gap-8 lg:pt-10">
           <div className="text-center lg:text-left">
-            <p className="mb-5 text-sm font-semibold uppercase tracking-[0.35em] text-muted">aftercut</p>
+            <p className="mb-5 text-sm font-semibold uppercase tracking-[0.35em] text-muted">{BRAND.name}</p>
             <h1 className="font-serif text-4xl leading-[1.08] tracking-tight text-fg md:text-5xl xl:text-[3.5rem]">
               Consistent content for artists, without the cap.
             </h1>
@@ -68,7 +69,7 @@ function Home() {
                 t: "Word-level lyric timing",
                 d: "Paste the words, or transcribe the vocal. If cloud speech-to-text is down, the isolated stem is heard in the browser. Nothing is filled with sample lyrics.",
               },
-              { icon: Grid2x2, t: "48 at a time", d: "Other studios stop at 10. Aftercut builds a full wall so you can actually choose." },
+              { icon: Grid2x2, t: "48 at a time", d: `Other studios stop at 10. ${BRAND.name} builds a full wall so you can actually choose.` },
               { icon: Download, t: "Unlimited exports", d: "No monthly ceiling. Export one video, or the whole wall as a zip, with no account." },
               { icon: AudioLines, t: "Packs included", d: "Night drive, tape room, after hours, grain — or drop in your own clips." },
               {
@@ -92,7 +93,7 @@ function Home() {
               <h2 className="font-serif text-3xl tracking-tight md:text-4xl">Your audience is one song away.</h2>
               <p className="mt-3 max-w-lg text-muted">
                 Bring a song, cut a wall of videos, export the ones that land. Compared with a 10-at-a-time / 60-export
-                plan, Aftercut does not meter the work.
+                plan, {BRAND.name} does not meter the work.
               </p>
             </div>
             <Link

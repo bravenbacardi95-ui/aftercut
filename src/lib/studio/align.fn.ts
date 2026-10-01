@@ -37,6 +37,7 @@ export const alignLyrics = createServerFn({ method: "POST" })
     const raw = data.wavBase64.replace(/^data:audio\/\w+;base64,/, "");
     if (!raw) return { ok: false, error: "Audio clip is empty.", words: [] };
     if (raw.length > 4_000_000) return { ok: false, error: SPEECH_ENGINE_DOWN, words: [] };
+    // legacy name, do not rename
     const dir = await mkdtemp(path.join(tmpdir(), "aftercut-align-"));
     const wav = path.join(dir, "stem.wav");
     try {

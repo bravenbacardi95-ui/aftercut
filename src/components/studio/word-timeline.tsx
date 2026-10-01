@@ -304,6 +304,7 @@ const WordBubble = memo(function WordBubble({
       setDraft(word.text);
       setEditing(true);
     };
+    // legacy name, do not rename
     window.addEventListener("aftercut-edit-word", onEditWord);
     return () => window.removeEventListener("aftercut-edit-word", onEditWord);
   }, [word.id, word.text]);

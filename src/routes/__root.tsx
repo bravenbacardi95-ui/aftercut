@@ -1,20 +1,18 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
+import { BRAND } from "@/lib/brand";
 import appCss from "../styles.css?url";
-
-const APP_NAME = "Aftercut";
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: APP_NAME },
+      { title: BRAND.name },
       {
         name: "description",
-        content:
-          "Drop a finished track. Aftercut builds a wall of beat-synced captioned videos — up to 48 at a time, unlimited exports.",
+        content: `Drop a finished track. ${BRAND.name} builds a wall of beat-synced captioned videos — up to 48 at a time, unlimited exports.`,
       },
       { name: "theme-color", content: "#0b0b0c" },
     ],

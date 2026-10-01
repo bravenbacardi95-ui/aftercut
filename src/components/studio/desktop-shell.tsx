@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Mark } from "@/components/site-header";
+import { BRAND } from "@/lib/brand";
 import { useStudio } from "@/lib/studio/store";
 import { SPEECH_ENGINE_DOWN } from "@/lib/studio/speech-error";
 import { cn } from "@/lib/utils";
@@ -49,7 +50,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
       <header className="flex h-11 shrink-0 items-center gap-3 border-b border-border px-3 md:px-4">
         <Link to="/" className="inline-flex items-center gap-2 text-fg hover:opacity-70">
           <Mark className="size-4" />
-          <span className="font-serif text-base tracking-tight">aftercut</span>
+          <span className="font-serif text-base tracking-tight">{BRAND.name}</span>
         </Link>
         {audioUrl ? (
           <>

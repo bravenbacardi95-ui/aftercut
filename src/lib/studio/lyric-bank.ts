@@ -12,6 +12,7 @@ export type LyricVersion = {
   key?: string;
 };
 
+// legacy name, do not rename
 const KEY = "aftercut-lyric-bank";
 
 export function lyricKey(trackName: string, duration: number) {

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { BRAND } from "@/lib/brand";
 import { analyzeAudio } from "./beats";
 import { setHearing } from "./yield";
 import { DEFAULT_CUT_IDS, DEMO_LYRICS, PACKS, resolveCutClips } from "./packs";
@@ -351,7 +352,7 @@ let dragRegionFrom: Region | null = null;
 let batchAbort: AbortController | null = null;
 
 function slugTrack(name: string) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "aftercut";
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || BRAND.name.toLowerCase();
 }
 
 export const useStudio = create<StudioState>((set, get) => ({

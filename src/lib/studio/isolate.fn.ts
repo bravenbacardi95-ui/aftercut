@@ -18,6 +18,7 @@ export const isolateVocalStem = createServerFn({ method: "POST" })
     if (raw.length > 4_000_000) {
       return { ok: false, error: SPEECH_ENGINE_DOWN, ms: 0, model: "htdemucs" };
     }
+    // legacy name, do not rename
     const dir = await mkdtemp(path.join(tmpdir(), "aftercut-stem-"));
     const input = path.join(dir, "snippet.wav");
     const output = path.join(dir, "vocal.wav");

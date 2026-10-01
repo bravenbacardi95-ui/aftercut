@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { BRAND } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 const links = [{ to: "/about", label: "About" }];
@@ -13,7 +14,7 @@ export function SiteHeader({ solid = false }: { solid?: boolean }) {
     >
       <Link to="/" className="inline-flex items-center gap-2.5 text-fg transition-opacity hover:opacity-70">
         <Mark />
-        <span className="font-serif text-xl tracking-tight md:text-[1.35rem]">aftercut</span>
+        <span className="font-serif text-xl tracking-tight md:text-[1.35rem]">{BRAND.name}</span>
       </Link>
       <nav className="flex items-center gap-5 md:gap-7" aria-label="Primary">
         {links.map((l) => (
@@ -50,8 +51,8 @@ export function SiteFooter() {
     <footer className="border-t border-border px-4 py-12 md:px-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-8 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="font-serif text-2xl tracking-tight">aftercut</p>
-          <p className="mt-2 max-w-sm text-sm text-muted">Built for everything after the music is made.</p>
+          <p className="font-serif text-2xl tracking-tight">{BRAND.name}</p>
+          <p className="mt-2 max-w-sm text-sm text-muted">{BRAND.tagline}</p>
         </div>
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted">
           <Link to="/studio" className="hover:text-fg">
@@ -62,7 +63,7 @@ export function SiteFooter() {
           </Link>
         </div>
       </div>
-      <p className="mx-auto mt-10 max-w-6xl text-xs text-subtle">© {new Date().getFullYear()} Aftercut. Unlimited exports.</p>
+      <p className="mx-auto mt-10 max-w-6xl text-xs text-subtle">© {new Date().getFullYear()} {BRAND.name}. Unlimited exports.</p>
     </footer>
   );
 }

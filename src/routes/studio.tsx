@@ -5,11 +5,12 @@ import { PlaybackProvider } from "@/components/studio/playback";
 import { StudioGuard } from "@/components/studio/studio-guard";
 import { takeHandoff } from "@/lib/studio/handoff";
 import { useStudio } from "@/lib/studio/store";
+import { BRAND } from "@/lib/brand";
 
 export const Route = createFileRoute("/studio")({
   component: StudioLayout,
   head: () => ({
-    meta: [{ title: "Studio · Aftercut" }],
+    meta: [{ title: `Studio · ${BRAND.name}` }],
   }),
 });
 
@@ -44,6 +45,7 @@ function StudioLayout() {
         const next = sorted[(index + step + sorted.length) % sorted.length];
         if (!next) return;
         selectWord(next.id);
+        // legacy name, do not rename
         window.dispatchEvent(new CustomEvent("aftercut-edit-word", { detail: next.id }));
         return;
       }

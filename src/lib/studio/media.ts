@@ -59,6 +59,7 @@ export function getVideo(src: string): HTMLVideoElement {
 
 function park(el: HTMLVideoElement) {
   if (typeof document === "undefined") return;
+  // legacy name, do not rename
   let host = document.getElementById("aftercut-media");
   if (!host) {
     host = document.createElement("div");

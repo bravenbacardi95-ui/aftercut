@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { pythonDaemon } from "./py-daemon.ts";
 
 test("a timed-out job kills the worker so the next job is not queued behind it", async () => {
+  // legacy name, do not rename
   const dir = mkdtempSync(path.join(tmpdir(), "aftercut-py-"));
   const script = path.join(dir, "stub.py");
   writeFileSync(

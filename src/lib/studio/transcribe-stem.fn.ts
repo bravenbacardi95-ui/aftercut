@@ -59,6 +59,7 @@ export const transcribeStem = createServerFn({ method: "POST" })
     if (raw.length > MAX_B64) return { ok: false, error: SPEECH_ENGINE_DOWN, unavailable: true };
     if ("error" in resolveAlignerPython()) return { ok: false, error: SPEECH_ENGINE_DOWN, unavailable: true };
 
+    // legacy name, do not rename
     const dir = await mkdtemp(path.join(tmpdir(), "aftercut-hear-"));
     const wav = path.join(dir, "stem.wav");
     try {

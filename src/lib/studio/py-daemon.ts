@@ -45,6 +45,7 @@ type State = {
   pending: Map<string, Pending>;
 };
 
+// legacy name, do not rename
 const POOL_KEY = "__aftercutPythonDaemons";
 const globals = globalThis as typeof globalThis & { [POOL_KEY]?: Map<string, State> };
 const pool = globals[POOL_KEY] ?? new Map<string, State>();

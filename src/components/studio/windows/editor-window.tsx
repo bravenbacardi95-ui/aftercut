@@ -9,6 +9,7 @@ import { WordTimeline } from "@/components/studio/word-timeline";
 import { FootageTimeline } from "@/components/studio/windows/footage-timeline";
 import { ClipShelf } from "@/components/studio/windows/footage-window";
 import { CAPTION_EFFECTS, CAPTION_FONTS, CAPTION_STYLES, FRAMINGS, LOOKS, resolveCutClips } from "@/lib/studio/packs";
+import { BRAND } from "@/lib/brand";
 import { downloadBlob, exportExtension, exportRecipe } from "@/lib/studio/export-video";
 import { useStudioLayout } from "@/lib/studio/layout";
 import { captionCaseLabel, captionPosLabel, captionSizeLabel, useStudio } from "@/lib/studio/store";
@@ -168,7 +169,7 @@ export function EditorWindow() {
 }
 
 function slug(name: string) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "aftercut";
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || BRAND.name.toLowerCase();
 }
 
 function StyleInspector({

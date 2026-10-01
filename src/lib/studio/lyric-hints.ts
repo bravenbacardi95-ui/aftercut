@@ -1,3 +1,4 @@
+// legacy name, do not rename
 const KEY = "aftercut-lyric-hints";
 
 function norm(text: string) {
