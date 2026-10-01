@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { AppIcon, Wordmark } from "@/components/brand/logo";
 import { BRAND } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
@@ -12,9 +13,8 @@ export function SiteHeader({ solid = false }: { solid?: boolean }) {
         solid ? "bg-bg" : "bg-transparent",
       )}
     >
-      <Link to="/" className="inline-flex items-center gap-2.5 text-fg transition-opacity hover:opacity-70">
-        <Mark />
-        <span className="font-serif text-xl tracking-tight md:text-[1.35rem]">{BRAND.name}</span>
+      <Link to="/" className="inline-flex items-center text-fg transition-opacity hover:opacity-70">
+        <Wordmark variant="on-dark" height={22} />
       </Link>
       <nav className="flex items-center gap-5 md:gap-7" aria-label="Primary">
         {links.map((l) => (
@@ -28,21 +28,12 @@ export function SiteHeader({ solid = false }: { solid?: boolean }) {
         ))}
         <Link
           to="/studio"
-          className="inline-flex h-10 items-center rounded-lg bg-accent px-3 text-sm font-medium text-accent-fg transition-opacity hover:opacity-90 sm:px-3.5"
+          className="inline-flex h-10 items-center rounded-lg bg-elevated px-3 text-sm font-medium text-fg shadow-[0_0_0_1px_rgba(242,239,232,0.08)] transition-opacity hover:opacity-90 sm:px-3.5"
         >
           Open studio
         </Link>
       </nav>
     </header>
-  );
-}
-
-export function Mark({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={cn("size-6", className)} aria-hidden="true">
-      <rect x="5.5" y="2.5" width="13" height="19" rx="2.4" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M8 9.5h8M8 12.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
   );
 }
 
@@ -63,7 +54,12 @@ export function SiteFooter() {
           </Link>
         </div>
       </div>
-      <p className="mx-auto mt-10 max-w-6xl text-xs text-subtle">© {new Date().getFullYear()} {BRAND.name}. Unlimited exports.</p>
+      <p className="mx-auto mt-10 flex max-w-6xl items-center gap-2 text-xs text-subtle">
+        <AppIcon size={16} />
+        <span>
+          © {new Date().getFullYear()} {BRAND.company}
+        </span>
+      </p>
     </footer>
   );
 }

@@ -68,7 +68,7 @@ export function ClipShelf() {
                 onClick={() => setCategory(pack.id)}
                 className={cn(
                   "shrink-0 rounded-md px-2 py-1 text-xs",
-                  packId === pack.id ? "bg-accent text-accent-fg" : "text-muted hover:text-fg",
+                  packId === pack.id ? "bg-fg text-bg" : "text-muted hover:text-fg",
                 )}
               >
                 {pack.name}
@@ -174,7 +174,7 @@ export function FootageWindow() {
             <ChevronLeft className="size-4" />
             Setup
           </button>
-          <h1 className="mt-2 text-lg font-medium">Clips for the batch</h1>
+          <h1 className="mt-2 text-lg font-semibold">Clips for the batch</h1>
           <p className="mt-1 text-sm text-muted">
             This pool is shared. Variations shuffle the order so the wall isn’t copies of one cut.
           </p>
@@ -206,7 +206,7 @@ export function FootageWindow() {
                     placeholder="NYC rain, Tokyo subway, empty diner…"
                     className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-subtle"
                   />
-                  <Button type="submit" size="sm" disabled={vaultBusy || query.trim().length < 2}>
+                  <Button type="submit" size="sm" variant="secondary" disabled={vaultBusy || query.trim().length < 2}>
                     {vaultBusy ? <LoaderCircle className="size-4 animate-spin" /> : "Search vault"}
                   </Button>
                 </label>
@@ -237,7 +237,7 @@ export function FootageWindow() {
                       aria-label={`${p.name}, ${p.clips.length} clips`}
                       className={cn(
                         "rounded-lg px-3 py-1.5 text-sm",
-                        packId === p.id ? "bg-accent text-accent-fg" : "bg-elevated text-muted hover:text-fg",
+                        packId === p.id ? "bg-fg text-bg" : "bg-elevated text-muted hover:text-fg",
                       )}
                     >
                       {p.name}
@@ -394,7 +394,7 @@ function CutTray({
                 <span
                   className={cn(
                     "absolute left-1 top-1 rounded px-1 text-[9px] font-medium uppercase",
-                    clip.origin === "upload" ? "bg-accent text-accent-fg" : "bg-bg/80 text-fg",
+                    clip.origin === "upload" ? "bg-fg text-bg" : "bg-bg/80 text-fg",
                   )}
                 >
                   {clip.origin === "upload" ? "Yours" : "Stock"}
@@ -474,7 +474,7 @@ function ClipTile({
         <span className="block truncate px-1.5 py-1 text-[11px] text-muted">{clip.name}</span>
       </button>
       {selected ? (
-        <span className="absolute right-1 top-1 rounded-full bg-accent p-0.5 text-accent-fg">
+        <span className="absolute right-1 top-1 rounded-full bg-fg p-0.5 text-bg">
           <Check className="size-3" />
         </span>
       ) : null}

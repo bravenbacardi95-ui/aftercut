@@ -139,7 +139,7 @@ export function RegionScrubber() {
         />
         <div
           data-handle="move"
-          className="absolute inset-y-0 cursor-grab bg-accent/20"
+          className="absolute inset-y-0 cursor-grab bg-fg/20"
           style={{ left: `${left}%`, width: `${width}%` }}
           onPointerDown={(e) => {
             e.stopPropagation();
@@ -157,7 +157,7 @@ export function RegionScrubber() {
             begin("start", e);
           }}
         >
-          <span className="absolute inset-y-2 left-1/2 w-1 -translate-x-1/2 rounded-full bg-accent" />
+          <span className="absolute inset-y-2 left-1/2 w-1 -translate-x-1/2 rounded-full bg-fg" />
         </div>
         <div
           data-handle="end"
@@ -170,7 +170,7 @@ export function RegionScrubber() {
             begin("end", e);
           }}
         >
-          <span className="absolute inset-y-2 left-1/2 w-1 -translate-x-1/2 rounded-full bg-accent" />
+          <span className="absolute inset-y-2 left-1/2 w-1 -translate-x-1/2 rounded-full bg-fg" />
         </div>
         <PlayheadMark elRef={playhead} timeRef={timeRef} duration={dur} />
       </div>

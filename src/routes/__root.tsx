@@ -14,7 +14,7 @@ export const Route = createRootRoute({
         name: "description",
         content: `Drop a finished track. ${BRAND.name} builds a wall of beat-synced captioned videos — up to 48 at a time, unlimited exports.`,
       },
-      { name: "theme-color", content: "#0b0b0c" },
+      { name: "theme-color", content: "#1a1a1a" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },

@@ -103,7 +103,7 @@ function SetupForm({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-lg font-medium">Set it up once</h1>
+        <h1 className="text-lg font-semibold">Set it up once</h1>
         <p className="mt-1 text-sm text-muted">
           {bpm} BPM · {formatTime(duration)} · {beats} beats
           {transcribing ? " · hearing lyrics" : ""}
@@ -209,7 +209,8 @@ function VocalIsolate() {
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
-          variant={playing || busy ? "primary" : "secondary"}
+          variant="secondary"
+          className={playing || busy ? "bg-fg text-bg" : undefined}
           size="sm"
           aria-pressed={playing}
           aria-busy={busy}
@@ -265,10 +266,10 @@ function PasteLyrics() {
         spellCheck={false}
         disabled={transcribing}
         placeholder="Paste the lines for this snippet. Each line stays its own caption."
-        className="mt-2 min-h-40 w-full resize-y rounded-lg bg-elevated px-3 py-2 text-sm leading-relaxed text-fg shadow-[0_0_0_1px_rgba(242,239,232,0.08)] outline-none focus:shadow-[0_0_0_1px_rgba(236,231,220,0.45)]"
+        className="mt-2 min-h-40 w-full resize-y rounded-lg bg-elevated px-3 py-2 text-sm leading-relaxed text-fg shadow-[0_0_0_1px_rgba(242,239,232,0.08)] outline-none focus:shadow-[0_0_0_1px_rgba(255,74,28,0.55)]"
       />
       <div className="mt-2 flex flex-wrap gap-2">
-        <Button type="button" onClick={() => void syncLyrics()} disabled={transcribing || !lyricDraft.trim()}>
+        <Button type="button" variant="secondary" onClick={() => void syncLyrics()} disabled={transcribing || !lyricDraft.trim()}>
           Sync lyrics
         </Button>
         <Button type="button" variant="secondary" onClick={() => void transcribe()} disabled={transcribing}>
@@ -297,7 +298,8 @@ function PasteLyrics() {
       <div className="mt-2">
         <Button
           type="button"
-          variant={clicks === "playing" ? "primary" : "secondary"}
+          variant="secondary"
+          className={clicks === "playing" ? "bg-fg text-bg" : undefined}
           size="sm"
           aria-pressed={clicks === "playing"}
           disabled={!words.length || transcribing}
@@ -318,7 +320,7 @@ function PasteLyrics() {
         <div className="mt-3" role="status">
           <div className="h-1 overflow-hidden rounded-full bg-elevated">
             <div
-              className={percent == null ? "h-full w-1/3 animate-pulse bg-accent" : "h-full bg-accent transition-[width] duration-200"}
+              className={percent == null ? "h-full w-1/3 animate-pulse bg-fg" : "h-full bg-fg transition-[width] duration-200"}
               style={percent == null ? undefined : { width: `${percent}%` }}
             />
           </div>

@@ -95,7 +95,7 @@ export function SplitPane({
           }
         }}
         className={cn(
-          "group relative z-20 shrink-0 bg-border hover:bg-accent",
+          "group relative z-20 shrink-0 bg-border hover:bg-fg",
           axis === "x" ? "w-1.5 cursor-col-resize" : "h-1.5 cursor-row-resize",
         )}
       >

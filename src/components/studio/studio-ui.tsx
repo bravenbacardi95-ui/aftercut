@@ -37,7 +37,7 @@ export function Chip({
       onClick={onClick}
       className={cn(
         "inline-flex h-9 items-center rounded-lg px-3 text-sm transition-[background-color,color,box-shadow] duration-150",
-        active ? "bg-accent text-accent-fg" : "bg-elevated text-muted hover:text-fg",
+        active ? "bg-fg text-bg" : "bg-elevated text-muted hover:text-fg",
       )}
     >
       {children}

@@ -51,7 +51,7 @@ function Home() {
             ].map((s) => (
               <li key={s.n} className="rounded-xl bg-surface p-6 shadow-[0_0_0_1px_rgba(242,239,232,0.08)]">
                 <p className="font-serif text-3xl text-muted">{s.n}</p>
-                <h3 className="mt-3 text-lg font-medium">{s.t}</h3>
+                <h3 className="mt-3 text-lg font-semibold">{s.t}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted">{s.d}</p>
               </li>
             ))}
@@ -80,7 +80,7 @@ function Home() {
             ].map((f) => (
               <div key={f.t} className="rounded-xl bg-surface p-5 shadow-[0_0_0_1px_rgba(242,239,232,0.08)]">
                 <f.icon className="size-5 text-muted" aria-hidden />
-                <h3 className="mt-4 text-base font-medium">{f.t}</h3>
+                <h3 className="mt-4 text-base font-semibold">{f.t}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted">{f.d}</p>
               </div>
             ))}
@@ -98,7 +98,7 @@ function Home() {
             </div>
             <Link
               to="/studio"
-              className="inline-flex h-12 items-center rounded-xl bg-accent px-5 text-base font-medium text-accent-fg transition-opacity hover:opacity-90"
+              className="inline-flex h-12 items-center rounded-xl bg-elevated px-5 text-base font-medium text-fg shadow-[0_0_0_1px_rgba(242,239,232,0.08)] transition-opacity hover:opacity-90"
             >
               Open the studio
             </Link>

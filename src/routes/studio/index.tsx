@@ -50,7 +50,7 @@ function StudioHome() {
         }}
         className={cn(
           "w-full max-w-lg rounded-xl border border-dashed px-6 py-12 text-center",
-          over ? "border-accent bg-elevated" : "border-border bg-surface",
+          over ? "border-fg bg-elevated" : "border-border bg-surface",
         )}
       >
         <Upload className="mx-auto size-6 text-muted" />

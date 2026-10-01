@@ -76,7 +76,7 @@ export function VaryWindow() {
             Footage
           </button>
           <div>
-            <h1 className="text-lg font-medium">Batch variations</h1>
+            <h1 className="text-lg font-semibold">Batch variations</h1>
             <p className="mt-1 text-sm text-muted">
               Each version keeps your lyrics and snippet, then changes type, look, framing, and clip order. One video mode is the path when you want a single cut you control.
             </p>

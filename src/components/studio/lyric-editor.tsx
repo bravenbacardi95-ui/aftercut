@@ -109,6 +109,7 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
           <Button
             type="button"
             size="sm"
+            variant="secondary"
             disabled={!words.length && !lyricDraft.trim()}
             onClick={() => {
               saveLyricVersion(versionName || `${trackName || "Track"} take`);
@@ -165,7 +166,7 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
           onBlur={applyLyrics}
           rows={compact ? 6 : 12}
           spellCheck={false}
-          className="mt-2 min-h-36 w-full flex-1 resize-none rounded-lg bg-elevated px-3 py-2 text-sm leading-relaxed text-fg shadow-[0_0_0_1px_rgba(242,239,232,0.08)] outline-none focus:shadow-[0_0_0_1px_rgba(236,231,220,0.45)]"
+          className="mt-2 min-h-36 w-full flex-1 resize-none rounded-lg bg-elevated px-3 py-2 text-sm leading-relaxed text-fg shadow-[0_0_0_1px_rgba(242,239,232,0.08)] outline-none focus:shadow-[0_0_0_1px_rgba(255,74,28,0.55)]"
           data-studio-undo=""
           placeholder="Paste lyrics, one phrase per line. Nothing is filled in until you sync or transcribe."
         />
@@ -174,7 +175,7 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
           <p className="text-sm text-muted">
             Transcribe this snippet from the vocal. Isolate vocals uses the server speech engine. Turn it off to hear the clip in the browser.
           </p>
-          <Button type="button" onClick={() => void transcribe()} disabled={transcribing}>
+          <Button type="button" variant="secondary" onClick={() => void transcribe()} disabled={transcribing}>
             {transcribing ? "Transcribing…" : "Transcribe instead"}
           </Button>
           {notice ? (
@@ -226,7 +227,7 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
                         className={cn(
                           "rounded-md px-1.5 py-0.5 text-sm font-medium text-lyric-fg",
                           CHIP[Math.abs(word.line) % CHIP.length],
-                          selected ? "ring-2 ring-accent" : "opacity-90 hover:opacity-100",
+                          selected ? "ring-2 ring-fg" : "opacity-90 hover:opacity-100",
                         )}
                       >
                         {word.text}

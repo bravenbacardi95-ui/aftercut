@@ -174,7 +174,8 @@ export function WordTimeline() {
           <Button
             type="button"
             size="sm"
-            variant={snapEnabled ? "primary" : "ghost"}
+            variant={snapEnabled ? "secondary" : "ghost"}
+            className={snapEnabled ? "bg-fg text-bg" : undefined}
             aria-pressed={snapEnabled}
             data-snap={snapEnabled ? "on" : "off"}
             onClick={() => setSnapEnabled(!snapEnabled)}
@@ -243,7 +244,7 @@ export function WordTimeline() {
           {beats.map((b) => (
             <div
               key={b}
-              className="pointer-events-none absolute inset-y-0 w-px bg-border"
+              className="pointer-events-none absolute inset-y-0 w-px bg-playhead"
               style={{ left: (b - region.start) * pxPerSec }}
             />
           ))}
@@ -323,7 +324,7 @@ const WordBubble = memo(function WordBubble({
       className={cn(
         "absolute top-8 flex h-9 items-center overflow-visible rounded-md text-lyric-fg",
         color,
-        selected ? "z-20 ring-2 ring-accent" : "z-10 opacity-90",
+        selected ? "z-20 ring-2 ring-fg" : "z-10 opacity-90",
         word.lowConfidence && "shadow-[inset_0_0_0_2px_#e23b3b]",
       )}
       style={{ left, width: widthPx }}

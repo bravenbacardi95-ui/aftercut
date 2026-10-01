@@ -57,7 +57,7 @@ export function WallWindow() {
           Variations
         </button>
         <div className="mt-4">
-          <h1 className="text-lg font-medium">Keep the ones that land</h1>
+          <h1 className="text-lg font-semibold">Keep the ones that land</h1>
           <p className="mt-1 text-sm text-muted">
             {recipes.length
               ? `${recipes.length} versions · ${unique} unique. Plate color, full or block, position, and row count change from one to the next.`
@@ -105,7 +105,7 @@ export function WallWindow() {
                     <div key={row.id}>
                       <p className="truncate text-xs text-muted">{row.label}</p>
                       <div className="mt-1 h-1 overflow-hidden rounded-full bg-elevated">
-                        <div className="h-full bg-accent" style={{ width: `${Math.round(row.progress * 100)}%` }} />
+                        <div className="h-full bg-fg" style={{ width: `${Math.round(row.progress * 100)}%` }} />
                       </div>
                     </div>
                   ))

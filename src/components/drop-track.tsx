@@ -35,7 +35,7 @@ export function DropTrack({ compact = false }: { compact?: boolean }) {
         onDrop={onDrop}
         className={cn(
           "flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-10 text-center transition-colors md:py-12",
-          over ? "border-accent bg-elevated" : "border-border bg-surface",
+          over ? "border-fg bg-elevated" : "border-border bg-surface",
         )}
       >
         <Upload className="size-6 text-muted" aria-hidden />

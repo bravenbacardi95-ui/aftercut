@@ -1,8 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Mark } from "@/components/site-header";
-import { BRAND } from "@/lib/brand";
+import { AppIcon } from "@/components/brand/logo";
 import { useStudio } from "@/lib/studio/store";
 import { SPEECH_ENGINE_DOWN } from "@/lib/studio/speech-error";
 import { cn } from "@/lib/utils";
@@ -48,9 +47,9 @@ export function DesktopShell({ children }: { children: ReactNode }) {
   return (
     <div className="studio-app flex h-dvh flex-col overflow-hidden bg-bg">
       <header className="flex h-11 shrink-0 items-center gap-3 border-b border-border px-3 md:px-4">
-        <Link to="/" className="inline-flex items-center gap-2 text-fg hover:opacity-70">
-          <Mark className="size-4" />
-          <span className="font-serif text-base tracking-tight">{BRAND.name}</span>
+        <Link to="/" className="inline-flex min-w-0 items-center gap-2 text-fg hover:opacity-70">
+          <AppIcon size={24} />
+          <span className="max-w-[16rem] truncate text-xs text-fg">{trackName || "studio"}</span>
         </Link>
         {audioUrl ? (
           <>
@@ -59,8 +58,9 @@ export function DesktopShell({ children }: { children: ReactNode }) {
             <ViewMenu />
           </>
         ) : null}
-        <span className="ml-auto hidden truncate text-xs text-subtle md:inline">{trackName || "studio"}</span>
-        <Clock />
+        <span className="ml-auto">
+          <Clock />
+        </span>
       </header>
       {audioUrl ? (
         <nav className="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1.5" aria-label="Windows">
@@ -68,7 +68,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
             <button
               type="button"
               aria-pressed={mode === "single"}
-              className={cn("rounded px-2.5 py-1 text-sm", mode === "single" ? "bg-accent text-accent-fg" : "text-muted hover:text-fg")}
+              className={cn("rounded px-2.5 py-1 text-sm", mode === "single" ? "bg-fg text-bg" : "text-muted hover:text-fg")}
               onClick={() => {
                 setMode("single");
                 const state = useStudio.getState();
@@ -81,7 +81,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
             <button
               type="button"
               aria-pressed={mode === "batch"}
-              className={cn("rounded px-2.5 py-1 text-sm", mode === "batch" ? "bg-accent text-accent-fg" : "text-muted hover:text-fg")}
+              className={cn("rounded px-2.5 py-1 text-sm", mode === "batch" ? "bg-fg text-bg" : "text-muted hover:text-fg")}
               onClick={() => {
                 setMode("batch");
                 void navigate({ href: "/studio/vary" });
@@ -135,7 +135,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
             {batchCurrent ? ` · ${batchCurrent.label}` : ""}
           </span>
           <div className="hidden h-1 w-24 overflow-hidden rounded-full bg-bg sm:block">
-            <div className="h-full bg-accent" style={{ width: `${Math.round((batchCurrent?.progress ?? 1) * 100)}%` }} />
+            <div className="h-full bg-fg" style={{ width: `${Math.round((batchCurrent?.progress ?? 1) * 100)}%` }} />
           </div>
           <button type="button" className="ml-auto shrink-0 text-sm text-muted hover:text-fg" onClick={() => cancelBatchExport()}>
             Cancel
