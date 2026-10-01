@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { LoaderCircle, Mic, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatMs } from "@/lib/studio/beats";
 import { lyricKey } from "@/lib/studio/lyric-bank";
 import { useStudio } from "@/lib/studio/store";
-import { warmTranscriber } from "@/lib/studio/whisper";
 import { cn } from "@/lib/utils";
 import { usePlayback } from "./playback";
 
@@ -39,14 +38,12 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
   const region = useStudio((s) => s.region);
   const lastRegion = useStudio((s) => s.lastTranscribedRegion);
   const activeLyricId = useStudio((s) => s.activeLyricId);
+  const isolateVocals = useStudio((s) => s.isolateVocals);
+  const speechEngine = useStudio((s) => s.speechEngine);
   const songKey = lyricKey(trackName, analysis?.duration ?? 0);
   const [mode, setMode] = useState<"words" | "text" | "transcribe">("words");
   const [versionName, setVersionName] = useState("");
-
-  useEffect(() => {
-    if (mode !== "transcribe") return;
-    warmTranscriber();
-  }, [mode]);
+  const transcribeBlocked = speechEngine === "down" && isolateVocals;
 
   const selected = words.find((w) => w.id === selectedWordId) ?? null;
 
@@ -178,9 +175,9 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
       ) : mode === "transcribe" ? (
         <div className="mt-2 flex flex-1 flex-col gap-3 rounded-lg bg-elevated px-3 py-3 shadow-[0_0_0_1px_rgba(242,239,232,0.08)]">
           <p className="text-sm text-muted">
-            Transcribe this snippet from the isolated vocal. If cloud speech-to-text is down, the browser model takes the same stem. Nothing is invented if both fail.
+            Transcribe this snippet from the vocal. Isolate vocals uses the server speech engine. Turn it off to hear the clip in the browser.
           </p>
-          <Button type="button" onClick={() => void transcribe()} disabled={transcribing}>
+          <Button type="button" onClick={() => void transcribe()} disabled={transcribing || transcribeBlocked}>
             {transcribing ? "Transcribing…" : "Transcribe instead"}
           </Button>
           {notice ? (
@@ -294,14 +291,14 @@ export function LyricEditor({ compact = false, actions = true }: { compact?: boo
 
       {actions ? (
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={() => void transcribe()} disabled={transcribing}>
+        <Button type="button" variant="secondary" size="sm" onClick={() => void transcribe()} disabled={transcribing || transcribeBlocked}>
           {transcribing ? <LoaderCircle className="size-4 animate-spin" /> : <Mic className="size-4" />}
           {transcribing ? "Transcribing…" : "Transcribe instead"}
         </Button>
         {lastRegion &&
         words.length &&
         (Math.abs(lastRegion.start - region.start) > 0.08 || Math.abs(lastRegion.end - region.end) > 0.08) ? (
-          <Button type="button" variant="secondary" size="sm" onClick={() => void syncLyrics()} disabled={transcribing}>
+          <Button type="button" variant="secondary" size="sm" onClick={() => void syncLyrics()} disabled={transcribing || speechEngine === "down"}>
             Re-sync to new window
           </Button>
         ) : null}

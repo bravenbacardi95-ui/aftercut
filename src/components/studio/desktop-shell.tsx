@@ -3,6 +3,7 @@ import { LoaderCircle } from "lucide-react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { Mark } from "@/components/site-header";
 import { useStudio } from "@/lib/studio/store";
+import { SPEECH_ENGINE_DOWN } from "@/lib/studio/speech-error";
 import { cn } from "@/lib/utils";
 
 const SINGLE = [
@@ -29,6 +30,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
   const error = useStudio((s) => s.error);
   const transcribing = useStudio((s) => s.transcribing);
   const transcribeStatus = useStudio((s) => s.transcribeStatus);
+  const speechEngine = useStudio((s) => s.speechEngine);
   const exporting = useStudio((s) => s.exporting);
   const batchRows = useStudio((s) => s.batchRows);
   const batchNote = useStudio((s) => s.batchNote);
@@ -113,6 +115,11 @@ export function DesktopShell({ children }: { children: ReactNode }) {
           <span>{transcribeStatus || "Hearing lyrics…"}</span>
           <span className="text-muted">The studio stays usable while this runs.</span>
         </div>
+      ) : null}
+      {speechEngine === "down" ? (
+        <p className="shrink-0 border-b border-border bg-elevated px-4 py-2 text-sm text-fg" role="status">
+          {SPEECH_ENGINE_DOWN}
+        </p>
       ) : null}
       {error ? (
         <p className="shrink-0 border-b border-border bg-elevated px-4 py-2 text-sm text-danger" role="alert">
@@ -203,6 +210,10 @@ function EditMenu() {
   const saveLyricVersion = useStudio((s) => s.saveLyricVersion);
   const trackName = useStudio((s) => s.trackName);
   const words = useStudio((s) => s.words);
+  const isolateVocals = useStudio((s) => s.isolateVocals);
+  const speechEngine = useStudio((s) => s.speechEngine);
+  const transcribing = useStudio((s) => s.transcribing);
+  const transcribeBlocked = speechEngine === "down" && isolateVocals;
   return (
     <Menu label="Edit">
       <MenuItem disabled={!canUndo} hint="⌘Z" onClick={() => undo()}>
@@ -217,7 +228,9 @@ function EditMenu() {
       >
         Save lyric version
       </MenuItem>
-      <MenuItem onClick={() => void transcribe()}>Transcribe instead</MenuItem>
+      <MenuItem disabled={transcribeBlocked || transcribing} onClick={() => void transcribe()}>
+        Transcribe instead
+      </MenuItem>
       <MenuItem onClick={() => addWordAt(region.start)}>Add word</MenuItem>
       <MenuItem disabled={!selectedWordId} onClick={() => selectedWordId && deleteWord(selectedWordId)}>
         Delete word

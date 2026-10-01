@@ -92,6 +92,23 @@ export async function encodeClipWav(
   return { blob: pcmToWav(pcm.samples, pcm.sampleRate), offset: pcm.offset, pcm };
 }
 
+const MIX_MAX_SECONDS = 48;
+
+/** Raw 16 kHz mono, no vocal filter. Sized so a 45 s snippet stays under a serverless body limit. */
+export async function encodeMixWav(start: number, end: number): Promise<{ blob: Blob; offset: number; pcm: ClipPcm } | null> {
+  const source = decoded;
+  if (!source) return null;
+  const t0 = Math.max(0, start);
+  const t1 = Math.min(source.duration, Math.max(t0 + 0.05, end));
+  const dur = Math.min(MIX_MAX_SECONDS, Math.max(0.05, t1 - t0));
+  const fromRate = source.sampleRate;
+  const offsetFrames = Math.floor(t0 * fromRate);
+  const mix = await mixDown(source, offsetFrames, Math.max(1, Math.ceil(fromRate * dur)));
+  const samples = await resample(mix, fromRate, TARGET_RATE);
+  const pcm = { samples, sampleRate: TARGET_RATE, offset: t0, duration: dur };
+  return { blob: pcmToWav(samples, TARGET_RATE), offset: t0, pcm };
+}
+
 function mixDown(source: AudioBuffer, offsetFrames: number, length: number) {
   return walk(length, (mix, i) => {
     const channels = source.numberOfChannels;

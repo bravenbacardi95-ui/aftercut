@@ -1,5 +1,6 @@
-import { getDecodedAudio, pcmToWav, encodeClipWav, encodeLyricWav, blobToBase64 } from "./audio-clip";
+import { getDecodedAudio, encodeMixWav, blobToBase64 } from "./audio-clip";
 import { isolateVocalStem } from "./isolate.fn";
+import { publicSpeechError } from "./speech-error";
 import type { Region } from "./types";
 
 const PAD = 0.5;
@@ -29,7 +30,7 @@ export async function prepareVocalStem(opts: {
 }): Promise<VocalStem | null> {
   if (!opts.isolate) {
     opts.onStatus?.("Reading the full mix…");
-    const mix = (await encodeLyricWav(opts.region.start, opts.region.end, "center")) ?? (await encodeClipWav(opts.region.start, opts.region.end, false));
+    const mix = await encodeMixWav(opts.region.start, opts.region.end);
     if (!mix) return null;
     return {
       blob: mix.blob,
@@ -54,19 +55,17 @@ export async function prepareVocalStem(opts: {
   }
 
   opts.onStatus?.("Isolating vocals…");
-  const slice = sliceMix(padStart, padEnd);
+  const slice = await encodeMixWav(padStart, padEnd);
   if (!slice) return null;
-  const wavBase64 = await blobToBase64(slice);
+  const wavBase64 = await blobToBase64(slice.blob);
   const result = await isolateVocalStem({ data: { wavBase64 } });
   if (!result.ok) {
-    const detail = result.error || "Vocal isolation failed.";
-    const error = /is down|failed/i.test(detail) ? detail : `Vocal isolation failed: ${detail}`;
     return {
       blob: new Blob([], { type: "audio/wav" }),
       offset: padStart,
       isolated: false,
       cached: false,
-      error,
+      error: publicSpeechError(result.error || "Vocal isolation failed."),
       ms: result.ms,
       url: "",
     };
@@ -84,22 +83,6 @@ export async function prepareVocalStem(opts: {
   };
   cache.set(key, stem);
   return stem;
-}
-
-function sliceMix(start: number, end: number): Blob | null {
-  const audio = getDecodedAudio();
-  if (!audio) return null;
-  const rate = audio.sampleRate;
-  const i0 = Math.max(0, Math.floor(start * rate));
-  const i1 = Math.min(audio.length, Math.ceil(end * rate));
-  const length = Math.max(1, i1 - i0);
-  const mix = new Float32Array(length);
-  const channels = audio.numberOfChannels;
-  for (let c = 0; c < channels; c++) {
-    const data = audio.getChannelData(c);
-    for (let i = 0; i < length; i++) mix[i] += (data[i0 + i] ?? 0) / channels;
-  }
-  return pcmToWav(mix, rate);
 }
 
 function base64ToBlob(value: string) {

@@ -19,6 +19,8 @@ import {
 import { buildRecipes, buildSingleRecipe, followRegion, moveCutTime, moveSegmentTo, removeCutAt, splitCuts } from "./recipes";
 import { findSavedLyrics, loadLyricBank, lyricKey, persistLyricBank, type LyricVersion } from "./lyric-bank";
 import { commitWords, transcribeRegion } from "./transcribe";
+import { publicSpeechError, SPEECH_ENGINE_DOWN } from "./speech-error";
+import { speechEngineReady } from "./speech-engine";
 import { alignLyrics } from "./align.fn";
 import { prepareVocalStem } from "./vocal-stem";
 import { clearHints } from "./lyric-hints";
@@ -61,6 +63,8 @@ type StudioState = {
   transcribeSource: TranscribeSource;
   transcribeStatus: string;
   transcribing: boolean;
+  speechEngine: "unknown" | "ready" | "down";
+  loadSpeechEngine: () => Promise<void>;
   lyricsDirty: boolean;
   lastTranscribedRegion: Region | null;
   isDemo: boolean;
@@ -176,6 +180,7 @@ const defaults = {
   transcribeSource: null as TranscribeSource,
   transcribeStatus: "",
   transcribing: false,
+  speechEngine: "unknown" as "unknown" | "ready" | "down",
   syncProgress: null as number | null,
   lyricsDirty: false,
   lastTranscribedRegion: null as Region | null,
@@ -496,6 +501,10 @@ export const useStudio = create<StudioState>((set, get) => ({
     touchSavedLyrics(get, set);
   },
   setIsolateVocals: (isolateVocals) => set({ isolateVocals }),
+  loadSpeechEngine: async () => {
+    const ready = await speechEngineReady(true);
+    set({ speechEngine: ready ? "ready" : "down" });
+  },
   setOnsetSnap: (onsetSnap) => set({ onsetSnap }),
   setSyncOffset: (ms) => {
     const next = Math.max(-200, Math.min(200, Math.round(ms)));
@@ -527,6 +536,21 @@ export const useStudio = create<StudioState>((set, get) => ({
       return;
     }
     if (!get().analysis) return;
+    if (get().speechEngine !== "ready") {
+      const ready = get().speechEngine === "down" ? false : await speechEngineReady();
+      if (!ready) {
+        set({
+          speechEngine: "down",
+          transcribing: false,
+          transcribeStatus: "",
+          syncProgress: null,
+          notice: SPEECH_ENGINE_DOWN,
+          noticeError: true,
+        });
+        return;
+      }
+      set({ speechEngine: "ready" });
+    }
     const gen = get().transcribeGen + 1;
     const region = get().region;
     set({
@@ -556,7 +580,7 @@ export const useStudio = create<StudioState>((set, get) => ({
           transcribing: false,
           transcribeStatus: "",
           syncProgress: null,
-          notice: stem.error ?? "Vocal isolation failed. Sync did not use the full mix.",
+          notice: publicSpeechError(stem.error ?? "Vocal isolation failed. Sync did not use the full mix."),
           noticeError: true,
         });
         return;
@@ -591,7 +615,9 @@ export const useStudio = create<StudioState>((set, get) => ({
           transcribing: false,
           transcribeStatus: "",
           syncProgress: null,
-          notice: [stem.error, aligned.ok ? aligned.warning : aligned.error].filter(Boolean).join(" ") || "Couldn’t align these lyrics.",
+          notice: publicSpeechError(
+            [stem.error, aligned.ok ? aligned.warning : aligned.error].filter(Boolean).join(" ") || "Couldn’t align these lyrics.",
+          ),
           noticeError: true,
         });
         return;
@@ -631,7 +657,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         transcribing: false,
         transcribeStatus: "",
         syncProgress: null,
-        notice: err instanceof Error ? err.message : "Sync failed",
+        notice: publicSpeechError(err instanceof Error ? err.message : err),
         noticeError: true,
       });
     } finally {
@@ -639,6 +665,20 @@ export const useStudio = create<StudioState>((set, get) => ({
     }
   },
   transcribe: async () => {
+    if (get().isolateVocals && get().speechEngine !== "ready") {
+      const ready = get().speechEngine === "down" ? false : await speechEngineReady();
+      if (!ready) {
+        set({
+          speechEngine: "down",
+          transcribing: false,
+          transcribeStatus: "",
+          notice: SPEECH_ENGINE_DOWN,
+          noticeError: true,
+        });
+        return;
+      }
+      set({ speechEngine: "ready" });
+    }
     const gen = get().transcribeGen + 1;
     set({ transcribeGen: gen, transcribing: true, notice: null, noticeError: false, lyricsDirty: false, transcribeStatus: get().isolateVocals ? "Isolating vocals…" : "Hearing lyrics…" });
     await runTranscribe(gen);
@@ -1020,8 +1060,10 @@ export const useStudio = create<StudioState>((set, get) => ({
     get().userClips.forEach((c) => URL.revokeObjectURL(c.src));
     clearVocalStemCache();
     setDecodedAudio(null);
+    const speechEngine = get().speechEngine;
     set({
       ...defaults,
+      speechEngine,
       lyricBank: get().lyricBank,
       activeLyricId: null,
       selectedClipIds: [...DEFAULT_CUT_IDS],
@@ -1066,6 +1108,7 @@ async function runTranscribe(gen: number) {
       audioUrl: state.audioUrl,
       trackName: state.trackName,
       isolate: state.isolateVocals,
+      shift: state.syncOffsetMs / 1000,
       onStatus: (msg) => {
         const latest = useStudio.getState();
         if (latest.transcribeGen !== gen) return;
@@ -1094,6 +1137,14 @@ async function runTranscribe(gen: number) {
       selectedWordId: null,
       lastTranscribedRegion: latest.region,
       lyricsDirty: false,
+    });
+  } catch (err) {
+    if (useStudio.getState().transcribeGen !== gen) return;
+    useStudio.setState({
+      transcribing: false,
+      transcribeStatus: "",
+      notice: publicSpeechError(err instanceof Error ? err.message : err),
+      noticeError: true,
     });
   } finally {
     setHearing(false);

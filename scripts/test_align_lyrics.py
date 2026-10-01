@@ -284,5 +284,117 @@ class AlignLyricsTest(unittest.TestCase):
                 self.assertGreater(word["startMs"], gap[1] * 1000, f"{word['text']} landed in the pre-split silence")
 
 
+class TranscribeVocalsTest(unittest.TestCase):
+    def setUp(self) -> None:
+        import transcribe_vocals
+
+        self.tv = transcribe_vocals
+        self._whisper = transcribe_vocals._WHISPER
+        self._name = transcribe_vocals._WHISPER_NAME
+        self._hear = transcribe_vocals.hear
+        self._samples = transcribe_vocals.samples_16k
+        self._align = align_lyrics.align_wav
+        transcribe_vocals._WHISPER = None
+        transcribe_vocals._WHISPER_NAME = ""
+
+    def tearDown(self) -> None:
+        self.tv._WHISPER = self._whisper
+        self.tv._WHISPER_NAME = self._name
+        self.tv.hear = self._hear
+        self.tv.samples_16k = self._samples
+        align_lyrics.align_wav = self._align
+
+    def test_hear_rejects_a_path_and_non_float32(self) -> None:
+        with self.assertRaises(TypeError):
+            self.tv.hear("clip.wav")
+        with self.assertRaises(TypeError):
+            self.tv.hear(np.zeros(8, dtype=np.float64))
+
+    def test_hear_passes_float32_and_decode_kwargs(self) -> None:
+        seen = {}
+
+        class Seg:
+            text = " hello "
+
+        class Model:
+            def transcribe(self, samples, **kwargs):
+                seen["samples"] = samples
+                seen["kwargs"] = kwargs
+                return [Seg()], None
+
+        self.tv._WHISPER = Model()
+        audio = np.zeros(160, dtype=np.float32)
+        self.assertEqual(self.tv.hear(audio), "hello")
+        self.assertIsInstance(seen["samples"], np.ndarray)
+        self.assertIs(seen["samples"], audio)
+        self.assertEqual(seen["samples"].dtype, np.float32)
+        self.assertEqual(seen["kwargs"]["language"], "en")
+        self.assertEqual(seen["kwargs"]["beam_size"], 5)
+        self.assertIs(seen["kwargs"]["condition_on_previous_text"], False)
+
+    def test_load_whisper_falls_back_to_base_en(self) -> None:
+        calls = []
+
+        def factory(name, device, compute):
+            calls.append((name, device, compute))
+            if name == "small.en":
+                raise RuntimeError("no small")
+            return {"name": name}
+
+        model = self.tv.load_whisper(factory)
+        self.assertEqual(calls, [("small.en", "cpu", "int8"), ("base.en", "cpu", "int8")])
+        self.assertEqual(model, {"name": "base.en"})
+        self.assertIs(self.tv.load_whisper(factory), model)
+        self.assertEqual(len(calls), 2)
+
+    def test_transcribe_wav_aligns_the_transcript_and_strips_raw_starts(self) -> None:
+        self.tv.samples_16k = lambda path: np.zeros(160, dtype=np.float32)
+        self.tv.hear = lambda samples: "keep running"
+
+        def fake_align(path, text, isolated, snap):
+            self.assertEqual(path, "stem.wav")
+            self.assertEqual(text, "keep running")
+            self.assertIs(isolated, True)
+            self.assertIs(snap, False)
+            return {
+                "ok": True,
+                "words": [
+                    {
+                        "text": "keep",
+                        "line": 0,
+                        "startMs": 12.4,
+                        "endMs": 80,
+                        "rawStartMs": 10,
+                        "confidence": 0.9,
+                    }
+                ],
+            }
+
+        align_lyrics.align_wav = fake_align
+        result = self.tv.transcribe_wav("stem.wav")
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(result["text"], "keep running")
+        self.assertEqual(result["words"][0]["text"], "keep")
+        self.assertEqual(result["words"][0]["startMs"], 12)
+        self.assertNotIn("rawStartMs", result["words"][0])
+        self.assertIn("asrMs", result)
+        self.assertIn("alignMs", result)
+
+    def test_empty_transcript_does_not_align(self) -> None:
+        self.tv.samples_16k = lambda path: np.zeros(8, dtype=np.float32)
+        self.tv.hear = lambda samples: "  "
+        called = {"n": 0}
+
+        def fake_align(*_args):
+            called["n"] += 1
+            return {"ok": True, "words": []}
+
+        align_lyrics.align_wav = fake_align
+        result = self.tv.transcribe_wav("x.wav")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["words"], [])
+        self.assertEqual(called["n"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

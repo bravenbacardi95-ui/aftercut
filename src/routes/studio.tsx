@@ -16,9 +16,14 @@ export const Route = createFileRoute("/studio")({
 function StudioLayout() {
   const loadFile = useStudio((s) => s.loadFile);
   const loadDemo = useStudio((s) => s.loadDemo);
+  const loadSpeechEngine = useStudio((s) => s.loadSpeechEngine);
   const audioUrl = useStudio((s) => s.audioUrl);
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  useEffect(() => {
+    void loadSpeechEngine();
+  }, [loadSpeechEngine]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

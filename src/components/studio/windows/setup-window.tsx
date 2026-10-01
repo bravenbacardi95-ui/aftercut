@@ -142,6 +142,7 @@ function VocalIsolate() {
   const region = useStudio((s) => s.region);
   const audioUrl = useStudio((s) => s.audioUrl);
   const transcribing = useStudio((s) => s.transcribing);
+  const speechEngine = useStudio((s) => s.speechEngine);
   const [note, setNote] = useState<string | null>(null);
   const [noteError, setNoteError] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -213,7 +214,7 @@ function VocalIsolate() {
           aria-pressed={playing}
           aria-busy={busy}
           onClick={() => void solo()}
-          disabled={busy || transcribing}
+          disabled={busy || transcribing || speechEngine === "down"}
         >
           {busy ? <LoaderCircle className="size-4 animate-spin" /> : null}
           {busy ? "Isolating…" : playing ? "Playing vocal" : "Solo vocal"}
@@ -241,6 +242,8 @@ function PasteLyrics() {
   const words = useStudio((s) => s.words);
   const notice = useStudio((s) => s.notice);
   const noticeError = useStudio((s) => s.noticeError);
+  const speechEngine = useStudio((s) => s.speechEngine);
+  const isolateVocals = useStudio((s) => s.isolateVocals);
   const syncOffsetMs = useStudio((s) => s.syncOffsetMs);
   const setSyncOffset = useStudio((s) => s.setSyncOffset);
   const drifted = Boolean(
@@ -249,6 +252,7 @@ function PasteLyrics() {
       (Math.abs(last.start - region.start) > 0.08 || Math.abs(last.end - region.end) > 0.08),
   );
   const [clicks, setClicks] = useState<"idle" | "playing">("idle");
+  const transcribeBlocked = speechEngine === "down" && isolateVocals;
   const percent = syncProgress == null ? null : Math.max(0, Math.min(100, syncProgress));
 
   return (
@@ -267,14 +271,14 @@ function PasteLyrics() {
         className="mt-2 min-h-40 w-full resize-y rounded-lg bg-elevated px-3 py-2 text-sm leading-relaxed text-fg shadow-[0_0_0_1px_rgba(242,239,232,0.08)] outline-none focus:shadow-[0_0_0_1px_rgba(236,231,220,0.45)]"
       />
       <div className="mt-2 flex flex-wrap gap-2">
-        <Button type="button" onClick={() => void syncLyrics()} disabled={transcribing || !lyricDraft.trim()}>
+        <Button type="button" onClick={() => void syncLyrics()} disabled={transcribing || !lyricDraft.trim() || speechEngine === "down"}>
           Sync lyrics
         </Button>
-        <Button type="button" variant="secondary" onClick={() => void transcribe()} disabled={transcribing}>
+        <Button type="button" variant="secondary" onClick={() => void transcribe()} disabled={transcribing || transcribeBlocked}>
           Transcribe instead
         </Button>
         {drifted ? (
-          <Button type="button" variant="secondary" onClick={() => void syncLyrics()} disabled={transcribing || !lyricDraft.trim()}>
+          <Button type="button" variant="secondary" onClick={() => void syncLyrics()} disabled={transcribing || !lyricDraft.trim() || speechEngine === "down"}>
             Re-sync to new window
           </Button>
         ) : null}
