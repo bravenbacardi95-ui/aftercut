@@ -147,7 +147,7 @@ export async function holdExportFrame(src: string | null, localTime: number) {
     if (key !== src && !video.paused) video.pause();
   }
   if (!el.paused) el.pause();
-  await seekVideo(el, at, 0.008);
+  await seekExportFrame(el, at);
 }
 
 export async function armExportClip(src: string | null, localTime: number) {
@@ -196,6 +196,49 @@ export function awaitVideoFrame(el: HTMLVideoElement, timeout = 48) {
 function wrappedDrift(current: number, target: number, dur: number) {
   const drift = Math.abs(current - target);
   return Math.min(drift, Math.abs(dur - drift));
+}
+
+function seekExportFrame(el: HTMLVideoElement, time: number) {
+  const tolerance = 0.03;
+  const deadline = performance.now() + 6000;
+  const ready = () => el.readyState >= 2 && el.videoWidth > 0 && Math.abs(el.currentTime - time) <= tolerance;
+  return new Promise<void>((resolve) => {
+    const tick = () => {
+      if (ready() || performance.now() > deadline) {
+        resolve();
+        return;
+      }
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        el.removeEventListener("seeked", onSeeked);
+        window.clearTimeout(timer);
+        if (ready() || performance.now() > deadline) resolve();
+        else window.setTimeout(tick, 0);
+      };
+      const onSeeked = () => finish();
+      const timer = window.setTimeout(finish, 1500);
+      el.addEventListener("seeked", onSeeked);
+      try {
+        if (!el.seeking || Math.abs(el.currentTime - time) > tolerance) el.currentTime = time;
+      } catch {
+        settled = true;
+        el.removeEventListener("seeked", onSeeked);
+        window.clearTimeout(timer);
+        resolve();
+      }
+    };
+    const arm = () => {
+      if (ready() || performance.now() > deadline) {
+        resolve();
+        return;
+      }
+      if (el.readyState >= 1) tick();
+      else window.setTimeout(arm, 40);
+    };
+    arm();
+  });
 }
 
 function seekVideo(el: HTMLVideoElement, time: number, tolerance = 0.04) {

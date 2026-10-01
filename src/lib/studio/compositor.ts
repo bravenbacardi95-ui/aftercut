@@ -286,25 +286,35 @@ function bratBlocks(lyrics: LyricLine[]) {
   return blocks;
 }
 
-function chooseBrat(
+function scaleLaid(laid: BratLaid, mul: number): BratLaid {
+  if (mul === 1) return laid;
+  return {
+    px: laid.px * mul,
+    gap: laid.gap * mul,
+    widths: laid.widths.map((width) => width * mul),
+    rows: laid.rows,
+    naturals: laid.naturals.map((width) => width * mul),
+    lh: laid.lh * mul,
+    target: laid.target * mul,
+  };
+}
+
+const BRAT_CANON = 720;
+
+function layoutBrat(
   ctx: CanvasRenderingContext2D,
   labels: string[],
   plateW: number,
   frameW: number,
   frameH: number,
   rowTarget: number | undefined,
-  size: number,
-) {
-  const key = `${Math.round(plateW)}|${Math.round(frameW)}|${Math.round(frameH)}|${rowTarget ?? ""}|${size}|${labels.join("\n")}`;
-  const cached = bratLayoutCache.get(key);
-  if (cached) return cached;
+): BratLaid {
   const short = labels.length <= 4;
   const wide = frameW / Math.max(1, frameH) >= 1.45;
   const target = wide ? Math.min(plateW * 0.85, frameH * 0.7) : plateW * 0.85;
-  const maxPx = Math.max(20, Math.round(plateW * (short ? 0.4 : 0.2) * size));
-  const minPx = Math.max(10, Math.round(plateW * 0.028 * Math.min(1, size)));
-  let best: (BratLaid & { score: number }) | null = null;
-  for (let px = maxPx; px >= minPx; px -= 2) {
+  const maxPx = Math.max(12, Math.round(plateW * (short ? 0.4 : 0.2)));
+  const minPx = Math.max(8, Math.round(plateW * 0.028));
+  const measure = (px: number) => {
     ctx.font = fontCss(px, "brat");
     const gap = Math.max(ctx.measureText(" ").width, px * 0.18) * BRAT_SX;
     const widths = labels.map((label) => ctx.measureText(label).width * BRAT_SX);
@@ -315,26 +325,53 @@ function chooseBrat(
     });
     const longest = naturals.reduce((max, n) => Math.max(max, n), 0);
     const lh = px * 1.12;
-    const rowCount = Math.max(1, rows.length);
-    const fill = longest / Math.max(1, target);
+    return { px, gap, widths, rows, naturals, lh, target, longest, rowCount: Math.max(1, rows.length) };
+  };
+
+  if (short) {
+    for (let px = maxPx; px >= minPx; px -= 2) {
+      const laid = measure(px);
+      if (laid.longest <= target * 1.02 && laid.rowCount * laid.lh <= frameH * 0.7) return laid;
+    }
+  }
+
+  let best: (BratLaid & { score: number }) | null = null;
+  for (let px = maxPx; px >= minPx; px -= 2) {
+    const laid = measure(px);
+    const fill = laid.longest / Math.max(1, target);
     let score = Math.abs(fill - 1);
-    if (longest > target * 1.04) score += (longest / target - 1) * 5;
+    if (laid.longest > target * 1.04) score += (laid.longest / target - 1) * 5;
     const wantRows = labels.length > 4 || wide;
     if (wantRows && labels.length >= 3) {
-      if (rowCount < 3) score += (3 - rowCount) * 0.9;
-      if (rowCount > 5) score += (rowCount - 5) * 1.2;
-      if (!short && rowTarget) score += Math.abs(rowCount - rowTarget) * 0.35;
-    } else if (short) {
-      score += Math.max(0, rowCount - 2) * 0.35;
+      if (laid.rowCount < 3) score += (3 - laid.rowCount) * 0.9;
+      if (laid.rowCount > 5) score += (laid.rowCount - 5) * 1.2;
+      if (rowTarget) score += Math.abs(laid.rowCount - rowTarget) * 0.35;
     }
-    if (rowCount * lh > frameH * 0.7) score += 2;
-    score -= px / (short ? 1800 : 5000);
-    if (!best || score < best.score) best = { score, px, gap, widths, rows, naturals, lh, target };
+    if (laid.rowCount * laid.lh > frameH * 0.7) score += 2;
+    score -= (laid.px / Math.max(1, plateW)) * (BRAT_CANON / 5000);
+    if (!best || score < best.score) best = { score, ...laid };
   }
-  const laid = best!;
-  if (bratLayoutCache.size > 48) bratLayoutCache.clear();
-  bratLayoutCache.set(key, laid);
-  return laid;
+  return best ?? measure(minPx);
+}
+
+function chooseBrat(
+  ctx: CanvasRenderingContext2D,
+  labels: string[],
+  plateW: number,
+  frameW: number,
+  frameH: number,
+  rowTarget: number | undefined,
+) {
+  const aspect = frameW / Math.max(1, frameH);
+  const plateFrac = plateW / Math.max(1, frameW);
+  const key = `${plateFrac.toFixed(4)}|${aspect.toFixed(4)}|${rowTarget ?? ""}|${labels.join("\n")}`;
+  let canon = bratLayoutCache.get(key);
+  if (!canon) {
+    canon = layoutBrat(ctx, labels, BRAT_CANON * plateFrac, BRAT_CANON, BRAT_CANON / aspect, rowTarget);
+    if (bratLayoutCache.size > 48) bratLayoutCache.clear();
+    bratLayoutCache.set(key, canon);
+  }
+  return scaleLaid(canon, frameW / BRAT_CANON);
 }
 
 function drawBrat(
@@ -370,7 +407,7 @@ function drawBrat(
   const position = look?.position ?? prefs.position ?? "mid";
   const labels = active.map((word) => word.text);
   const plateW = mode === "block" ? w * 0.78 : w;
-  const laid = chooseBrat(ctx, labels, plateW, w, h, look?.rows, sizeMul(prefs.size));
+  const laid = scaleLaid(chooseBrat(ctx, labels, plateW, w, h, look?.rows), sizeMul(prefs.size));
   const target = laid.target;
   const left = (w - target) / 2;
   const blockH = laid.rows.length * laid.lh;
@@ -673,6 +710,11 @@ function sourceSize(el: CanvasImageSource): { sw: number; sh: number } {
   return { sw: 0, sh: 0 };
 }
 
+export function frameShowsFootage(recipe: Recipe, prefs: CaptionPrefs) {
+  const bratMode = recipe.bratPlateMode ?? prefs.bratPlateMode ?? "full";
+  return recipe.captionStyle !== "brat" || bratMode === "block" || (recipe.bratPlateMode == null && prefs.bratFootage);
+}
+
 export function drawFrame(
   ctx: CanvasRenderingContext2D,
   opts: {
@@ -691,8 +733,7 @@ export function drawFrame(
   const quality = opts.quality ?? "export";
   const bratMode = recipe.bratPlateMode ?? prefs.bratPlateMode ?? "full";
   const bratPlate = recipe.bratPlate ?? prefs.bratPlate;
-  const showFootage =
-    recipe.captionStyle !== "brat" || bratMode === "block" || (recipe.bratPlateMode == null && prefs.bratFootage);
+  const showFootage = frameShowsFootage(recipe, prefs);
   const bratPlateOnly = recipe.captionStyle === "brat" && !showFootage;
   try {
   ctx.imageSmoothingEnabled = true;
@@ -726,7 +767,7 @@ export function drawFrame(
       if (clip.kind === "video") {
         const vid = getVideo(clip.src);
         const { sw, sh } = sourceSize(vid);
-        if (clip.poster) {
+        if (quality !== "export" && clip.poster) {
           const img = getImage(clip.poster);
           const s = sourceSize(img);
           if (s.sw && (!sw || vid.readyState < 2)) {

@@ -43,29 +43,78 @@ function shownWord(text: string) {
   return stripped.length ? stripped : text;
 }
 
-export function groupWordsIntoLines(words: LyricWord[], gap = 0.6): LyricLine[] {
+const LINE_CAP = 8;
+
+function median(values: number[]) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
+function gapAt(words: LyricWord[], index: number) {
+  return words[index]!.start - words[index - 1]!.end;
+}
+
+/** A pause is a break when it is clearly larger than the gaps inside the phrase, not when it clears a fixed 0.6s. */
+function clearPause(words: LyricWord[], index: number) {
+  const gap = gapAt(words, index);
+  if (!(gap > 0)) return false;
+  const samples: number[] = [];
+  const lo = Math.max(1, index - 8);
+  const hi = Math.min(words.length - 1, index + 8);
+  for (let k = lo; k <= hi; k++) {
+    if (k === index) continue;
+    const other = gapAt(words, k);
+    if (other > 0) samples.push(other);
+  }
+  if (!samples.length) return false;
+  const lower = [...samples].sort((a, b) => a - b).slice(0, Math.max(1, Math.ceil(samples.length * 0.6)));
+  const base = median(lower);
+  return gap > base * 2 && gap >= base + 0.12;
+}
+
+function splitAtBiggestGap(group: LyricWord[]): LyricWord[][] {
+  if (group.length <= LINE_CAP) return [group];
+  let maxGap = -Infinity;
+  for (let i = 1; i < group.length; i++) maxGap = Math.max(maxGap, Math.max(0, gapAt(group, i)));
+  let best = 1;
+  let bestDist = Infinity;
+  for (let i = 1; i < group.length; i++) {
+    if (Math.max(0, gapAt(group, i)) < maxGap - 1e-6) continue;
+    const dist = Math.abs(i - group.length / 2);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = i;
+    }
+  }
+  return [...splitAtBiggestGap(group.slice(0, best)), ...splitAtBiggestGap(group.slice(best))];
+}
+
+export function groupWordsIntoLines(words: LyricWord[]): LyricLine[] {
   if (!words.length) return [];
   const sorted = [...words].sort((a, b) => a.start - b.start || a.end - b.end);
-  const groups: LyricWord[][] = [];
+  const phrases: LyricWord[][] = [];
   let cur: LyricWord[] = [];
-  for (const word of sorted) {
+  for (let i = 0; i < sorted.length; i++) {
+    const word = sorted[i]!;
     const prev = cur[cur.length - 1];
-    const newLine = !prev || word.line !== prev.line || word.start - prev.end >= gap || cur.length >= 8;
-    if (newLine && cur.length) {
-      groups.push(cur);
+    if (prev && (word.line !== prev.line || clearPause(sorted, i))) {
+      phrases.push(cur);
       cur = [word];
     } else {
       cur.push(word);
     }
   }
-  if (cur.length) groups.push(cur);
+  if (cur.length) phrases.push(cur);
 
+  const groups = phrases.flatMap((phrase) => splitAtBiggestGap(phrase));
   return groups.map((group, i) => {
-    const start = group[0].start;
-    const end = group[group.length - 1].end;
+    const start = group[0]!.start;
+    const end = group[group.length - 1]!.end;
     const tagged = group.map((w) => ({ ...w, text: shownWord(w.text), line: i }));
     return {
-      id: `ln-${i}-${tagged[0].id}`,
+      id: `ln-${i}-${tagged[0]!.id}`,
       text: tagged.map((w) => w.text).join(" "),
       start,
       end,
